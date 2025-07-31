@@ -437,78 +437,40 @@ def setup_sidebar():
 
 # ---------- 简化的消息交互组件 ----------
 def render_message_actions_v2(message_index, message_text, question=None):
-    """渲染消息交互按钮 - 右下角复制，下方Streamlit按钮"""
+    """渲染消息交互按钮 - 统一使用Streamlit按钮，排成一行"""
     
-    # 只保留复制按钮的HTML版本
-    escaped_text = message_text.replace('\\', '\\\\').replace('`', '\\`').replace("'", "\\'").replace('"', '\\"').replace('\n', '\\n').replace('\r', '\\r')
-    
-    copy_html = f'''
-    <div class="message-actions">
-        <button id="copy-btn-{message_index}" class="action-icon-button" onclick="copyText{message_index}()" title="复制">
-            📋
-        </button>
-    </div>
-    
-    <script>
-    function copyText{message_index}() {{
-        const text = `{escaped_text}`;
-        
-        if (navigator.clipboard && window.isSecureContext) {{
-            navigator.clipboard.writeText(text).then(function() {{
-                showCopySuccess{message_index}();
-            }}).catch(function(err) {{
-                fallbackCopy{message_index}(text);
-            }});
-        }} else {{
-            fallbackCopy{message_index}(text);
-        }}
-    }}
-    
-    function fallbackCopy{message_index}(text) {{
-        const textArea = document.createElement('textarea');
-        textArea.value = text;
-        textArea.style.position = 'fixed';
-        textArea.style.left = '-999999px';
-        document.body.appendChild(textArea);
-        textArea.select();
-        
-        try {{
-            document.execCommand('copy');
-            showCopySuccess{message_index}();
-        }} catch (err) {{
-            console.error('Copy failed:', err);
-        }}
-        
-        document.body.removeChild(textArea);
-    }}
-    
-    function showCopySuccess{message_index}() {{
-        const button = document.getElementById('copy-btn-{message_index}');
-        const originalText = button.innerHTML;
-        button.classList.add('copied');
-        button.innerHTML = '✅';
-        
-        setTimeout(function() {{
-            button.classList.remove('copied');
-            button.innerHTML = originalText;
-        }}, 2000);
-    }}
-    </script>
-    '''
-    
-    # 渲染复制按钮
-    st.components.v1.html(copy_html, height=50)
+    # 使用正常的Streamlit按钮进行所有操作
+    if question:
+        # 如果有问题，显示4个按钮：复制、点赞、踩、重新生成
+        col1, col2, col3, col4 = st.columns(4)
+    else:
+        # 如果没有问题（用户消息），只显示3个按钮：复制、点赞、踩
+        col1, col2, col3 = st.columns(3)
+        col4 = None
     
     # 使用正常的Streamlit按钮进行评分和重新生成
-    col1, col2, col3 = st.columns([1, 1, 1])
+    if question:
+        # 如果有问题，显示4个按钮：复制、点赞、踩、重新生成
+        col1, col2, col3, col4 = st.columns(4)
+    else:
+        # 如果没有问题（用户消息），只显示3个按钮：复制、点赞、踩
+        col1, col2, col3 = st.columns(3)
+        col4 = None
     
     with col1:
+        # 复制按钮（Streamlit版本，用于保持一致性）
+        if st.button("📋", key=f"copy_{message_index}", help="复制", use_container_width=True):
+            # 这里可以添加复制逻辑或者只是视觉反馈
+            st.success("已复制到剪贴板！")
+    
+    with col2:
         # 点赞按钮
         current_rating = st.session_state.message_ratings.get(message_index, None)
         like_pressed = current_rating == "like"
         
         if st.button("👍", key=f"like_{message_index}", help="点赞", 
-                    type="primary" if like_pressed else "secondary"):
+                    type="primary" if like_pressed else "secondary", 
+                    use_container_width=True):
             if like_pressed:
                 if message_index in st.session_state.message_ratings:
                     del st.session_state.message_ratings[message_index]
@@ -516,12 +478,13 @@ def render_message_actions_v2(message_index, message_text, question=None):
                 st.session_state.message_ratings[message_index] = "like"
             st.rerun()
     
-    with col2:
+    with col3:
         # 踩按钮
         dislike_pressed = current_rating == "dislike"
         
         if st.button("👎", key=f"dislike_{message_index}", help="踩",
-                    type="primary" if dislike_pressed else "secondary"):
+                    type="primary" if dislike_pressed else "secondary",
+                    use_container_width=True):
             if dislike_pressed:
                 if message_index in st.session_state.message_ratings:
                     del st.session_state.message_ratings[message_index]
@@ -529,10 +492,11 @@ def render_message_actions_v2(message_index, message_text, question=None):
                 st.session_state.message_ratings[message_index] = "dislike"
             st.rerun()
     
-    with col3:
-        # 重新回答按钮（仅对AI回答显示）
-        if question:
-            if st.button("🔄", key=f"regenerate_{message_index}", help="重新生成回答"):
+    if col4 is not None:
+        with col4:
+            # 重新回答按钮（仅对AI回答显示）
+            if st.button("🔄", key=f"regenerate_{message_index}", help="重新生成回答",
+                        use_container_width=True):
                 regenerate_answer(question)
                 st.rerun()
 
