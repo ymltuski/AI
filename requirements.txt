@@ -16,4 +16,5 @@ streamlit
 langchain
 langchain-openai
 langchain-community
-docx2txt PyPDF2
+docx2txt 
+PyPDF2
