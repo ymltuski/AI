@@ -17,7 +17,7 @@ import json
 
 # 页面配置
 st.set_page_config(
-    page_title="动手学大模型应用开发", 
+    page_title="重庆科技大学", 
     page_icon="🦜🔗",
     layout="wide",
     initial_sidebar_state="expanded"
