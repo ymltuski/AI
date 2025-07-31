@@ -12,7 +12,8 @@ from langchain_core.messages import HumanMessage, AIMessage
 import docx2txt
 import PyPDF2
 import io
-import uuid  # 用于生成唯一ID
+import time
+import json
 
 # 页面配置
 st.set_page_config(
@@ -53,33 +54,113 @@ st.markdown("""
         border-radius: 10px;
         margin-bottom: 1rem;
     }
-    .copy-btn {
-        cursor: pointer;
-        color: #667eea;
-        font-size: 0.8em;
-        margin-left: 0.5em;
+    .message-actions {
+        display: flex;
+        gap: 0.5rem;
+        margin-top: 0.5rem;
+        margin-bottom: 0.5rem;
     }
-    .feedback-btn {
-        font-size: 1.2em;
-        margin-right: 0.5em;
+    .action-button {
+        background: none;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        padding: 0.25rem 0.5rem;
+        cursor: pointer;
+        font-size: 0.8rem;
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+    }
+    .action-button:hover {
+        background-color: #f0f0f0;
+    }
+    .liked {
+        color: #4CAF50;
+        border-color: #4CAF50;
+    }
+    .disliked {
+        color: #f44336;
+        border-color: #f44336;
+    }
+    .copy-success {
+        color: #4CAF50;
+        font-size: 0.8rem;
+        margin-left: 0.5rem;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# JavaScript for copy to clipboard
-st.markdown("""
-<script>
-function copyToClipboard(text) {
-    navigator.clipboard.writeText(text).then(function() {
-        alert('已复制到剪贴板!');
-    }, function(err) {
-        console.error('复制失败: ', err);
-    });
-}
-</script>
-""", unsafe_allow_html=True)
+# ---------- 初始化会话状态 ----------
+def initialize_session_state():
+    """初始化会话状态变量"""
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+    
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = []
+    
+    if "message_ratings" not in st.session_state:
+        st.session_state.message_ratings = {}  # 存储消息评分
+    
+    if "regenerating" not in st.session_state:
+        st.session_state.regenerating = False
+    
+    if "last_question" not in st.session_state:
+        st.session_state.last_question = ""
 
-# ---------- 1. 从本地 Markdown 文件获取文档内容 ----------
+# ---------- 复制到剪贴板功能 ----------
+def add_copy_button(text, button_key):
+    """添加复制按钮"""
+    # 使用JavaScript实现复制功能
+    copy_script = f"""
+    <script>
+    function copyToClipboard{button_key}() {{
+        const text = `{text.replace('`', '\\`').replace('\\', '\\\\').replace('\n', '\\n')}`;
+        navigator.clipboard.writeText(text).then(function() {{
+            const button = document.getElementById('copy-btn-{button_key}');
+            const originalText = button.innerHTML;
+            button.innerHTML = '✅ 已复制';
+            button.style.color = '#4CAF50';
+            setTimeout(function() {{
+                button.innerHTML = originalText;
+                button.style.color = '';
+            }}, 2000);
+        }}).catch(function(err) {{
+            console.error('复制失败: ', err);
+            alert('复制失败，请手动复制');
+        }});
+    }}
+    </script>
+    <button id="copy-btn-{button_key}" onclick="copyToClipboard{button_key}()" 
+            style="background: none; border: 1px solid #ddd; border-radius: 5px; 
+                   padding: 0.25rem 0.5rem; cursor: pointer; font-size: 0.8rem;">
+        📋 复制
+    </button>
+    """
+    return copy_script
+
+# ---------- 消息评分功能 ----------
+def handle_message_rating(message_index, rating):
+    """处理消息评分"""
+    st.session_state.message_ratings[message_index] = rating
+    # 这里可以添加日志记录或数据收集逻辑
+    print(f"Message {message_index} rated: {rating}")
+
+# ---------- 重新生成回答功能 ----------
+def regenerate_answer(question):
+    """重新生成回答"""
+    st.session_state.regenerating = True
+    st.session_state.last_question = question
+    
+    # 移除最后一条AI回答
+    if st.session_state.messages and st.session_state.messages[-1][0] == "assistant":
+        st.session_state.messages.pop()
+        
+    # 移除对话历史中的最后一条AI消息
+    if st.session_state.chat_history and isinstance(st.session_state.chat_history[-1], AIMessage):
+        st.session_state.chat_history.pop()
+
+# ---------- 从本地 Markdown 文件获取文档内容 ----------
 def fetch_document_from_file(file_path):
     try:
         with open(file_path, "r", encoding="utf-8") as file:
@@ -91,7 +172,7 @@ def fetch_document_from_file(file_path):
         st.error(f"无法读取文件: {e}")
         return ""
 
-# ---------- 2. 处理上传文件 ----------
+# ---------- 处理上传文件 ----------
 def process_uploaded_file(uploaded_file):
     """处理上传的文件并提取文本内容"""
     try:
@@ -131,7 +212,7 @@ def process_uploaded_file(uploaded_file):
         st.error(f"处理文件 {uploaded_file.name} 时出错: {str(e)}")
         return ""
 
-# ---------- 3. 测试检索器功能 ----------
+# ---------- 测试检索器功能 ----------
 def test_retriever(question="测试"):
     """测试检索器是否正常工作"""
     try:
@@ -144,7 +225,7 @@ def test_retriever(question="测试"):
         st.error(f"测试检索器时出错: {e}")
         return []
 
-# ---------- 3. 构建检索器 ----------
+# ---------- 构建检索器 ----------
 def build_retriever():
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
@@ -179,7 +260,7 @@ def build_retriever():
     vectorstore = FAISS.from_documents(docs, embeddings)
     return vectorstore.as_retriever(search_kwargs={"k": 4})
 
-# ---------- 4. 构建问答链（带记忆功能） ----------
+# ---------- 构建问答链（带记忆功能） ----------
 def get_qa_chain_with_memory():
     llm = ChatOpenAI(model_name="gpt-4o", temperature=0, openai_api_key=os.getenv("OPENAI_API_KEY"))
     
@@ -238,7 +319,7 @@ def get_qa_chain_with_memory():
     
     return chain
 
-# ---------- 5. 侧边栏功能 ----------
+# ---------- 侧边栏功能 ----------
 def setup_sidebar():
     with st.sidebar:
         st.markdown("### 📁 文件上传")
@@ -327,12 +408,30 @@ def setup_sidebar():
         
         st.markdown("---")
         
+        # 显示评分统计
+        if st.session_state.message_ratings:
+            st.markdown("### 📊 回答质量统计")
+            likes = sum(1 for rating in st.session_state.message_ratings.values() if rating == "like")
+            dislikes = sum(1 for rating in st.session_state.message_ratings.values() if rating == "dislike")
+            total_ratings = len(st.session_state.message_ratings)
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric("👍 点赞", likes)
+            with col2:
+                st.metric("👎 踩", dislikes)
+            
+            if total_ratings > 0:
+                satisfaction_rate = (likes / total_ratings) * 100
+                st.metric("满意度", f"{satisfaction_rate:.1f}%")
+        
+        st.markdown("---")
+        
         # 清除对话历史按钮
         if st.button("🗑️ 清除对话历史", use_container_width=True):
             st.session_state.messages = []
             st.session_state.chat_history = []
-            if 'feedback' in st.session_state:
-                del st.session_state.feedback
+            st.session_state.message_ratings = {}
             st.success("对话历史已清除！")
             st.rerun()
         
@@ -356,34 +455,85 @@ def setup_sidebar():
             - 🧠 知识融合：找不到时使用AI自身知识回答
             - 💭 对话记忆：记住之前的对话内容
             - 📁 文件上传：支持多种格式文档
-            - 👍 交互反馈：点赞/不喜欢答案
-            - 📋 复制答案：一键复制AI回答
-            - 🔄 重新回答：重新生成答案
+            - 📋 复制答案：一键复制AI回答到剪贴板
+            - 👍👎 评分系统：对回答进行点赞或踩
+            - 🔄 重新回答：不满意可重新生成回答
             
             **使用方法：**
             1. 上传相关文档文件（会自动处理并加入知识库）
             2. 在下方输入框中提问
             3. AI会结合文档内容和对话历史回答
-            4. 对答案进行反馈或操作
+            4. 使用底部按钮进行复制、评分或重新生成
             
             **注意事项：**
             - 文件上传后会自动构建知识库
             - 大文件处理可能需要几秒钟时间
             - 支持同时上传多个文件
+            - 评分数据会用于改进服务质量
             """)
-        
-        # 调试信息（可选）
-        if st.checkbox("显示调试信息"):
-            st.markdown("### 🔧 调试信息")
-            if 'uploaded_docs' in st.session_state:
-                st.write(f"上传文档数量: {len(st.session_state.uploaded_docs)}")
-                for i, doc in enumerate(st.session_state.uploaded_docs):
-                    st.write(f"文档 {i+1} 长度: {len(doc)} 字符")
-            else:
-                st.write("暂无上传文档")
 
-# ---------- 6. Streamlit 主界面 ----------
+# ---------- 消息交互组件 ----------
+def render_message_actions(message_index, message_text, question=None):
+    """渲染消息交互按钮"""
+    col1, col2, col3, col4 = st.columns([1, 1, 1, 5])
+    
+    with col1:
+        # 复制按钮
+        if st.button("📋", key=f"copy_{message_index}", help="复制到剪贴板"):
+            # 使用JavaScript复制功能
+            copy_js = f"""
+            <script>
+            navigator.clipboard.writeText(`{message_text.replace('`', '\\`').replace('\\', '\\\\')}`).then(function() {{
+                alert('已复制到剪贴板！');
+            }}).catch(function(err) {{
+                console.error('复制失败: ', err);
+                alert('复制失败，请手动复制');
+            }});
+            </script>
+            """
+            st.components.v1.html(copy_js, height=0)
+    
+    with col2:
+        # 点赞按钮
+        like_key = f"like_{message_index}"
+        current_rating = st.session_state.message_ratings.get(message_index, None)
+        like_color = "🟢" if current_rating == "like" else "👍"
+        
+        if st.button(like_color, key=like_key, help="点赞"):
+            if current_rating == "like":
+                # 取消点赞
+                del st.session_state.message_ratings[message_index]
+            else:
+                # 点赞
+                st.session_state.message_ratings[message_index] = "like"
+            st.rerun()
+    
+    with col3:
+        # 踩按钮
+        dislike_key = f"dislike_{message_index}"
+        dislike_color = "🔴" if current_rating == "dislike" else "👎"
+        
+        if st.button(dislike_color, key=dislike_key, help="踩"):
+            if current_rating == "dislike":
+                # 取消踩
+                del st.session_state.message_ratings[message_index]
+            else:
+                # 踩
+                st.session_state.message_ratings[message_index] = "dislike"
+            st.rerun()
+    
+    with col4:
+        # 重新回答按钮（仅对AI回答显示）
+        if question:
+            if st.button("🔄 重新回答", key=f"regenerate_{message_index}", help="重新生成回答"):
+                regenerate_answer(question)
+                st.rerun()
+
+# ---------- Streamlit 主界面 ----------
 def main():
+    # 初始化会话状态
+    initialize_session_state()
+    
     # 页面标题
     st.markdown("""
     <div class="main-header">
@@ -394,21 +544,9 @@ def main():
     # 设置侧边栏
     setup_sidebar()
     
-    # 初始化会话状态
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
-    
-    if "chat_history" not in st.session_state:
-        st.session_state.chat_history = []
-    
+    # 初始化链
     if "chain" not in st.session_state:
         st.session_state.chain = get_qa_chain_with_memory()
-    
-    if "feedback" not in st.session_state:
-        st.session_state.feedback = {}  # 存储每个消息ID的反馈: 'like' 或 'dislike'
-    
-    if "message_ids" not in st.session_state:
-        st.session_state.message_ids = []  # 存储消息ID和对应的question
     
     # 主聊天区域
     st.markdown("### 💬 智能问答")
@@ -417,60 +555,54 @@ def main():
     msgs = st.container(height=500)
     
     # 显示聊天历史
-    for idx, (role, text) in enumerate(st.session_state.messages):
+    for i, (role, text) in enumerate(st.session_state.messages):
         with msgs.chat_message(role):
             st.write(text)
+            
+            # 为AI回答添加交互按钮
             if role == "assistant":
-                message_id = str(idx)  # 使用索引作为ID
+                # 寻找对应的用户问题
+                question = None
+                if i > 0 and st.session_state.messages[i-1][0] == "user":
+                    question = st.session_state.messages[i-1][1]
                 
-                # 交互按钮容器
-                col_copy, col_feedback, col_regen = st.columns([1,2,1])
+                render_message_actions(i, text, question)
+    
+    # 处理重新生成回答
+    if st.session_state.regenerating:
+        with msgs.chat_message("assistant"):
+            try:
+                # 准备输入数据
+                chain_input = {
+                    "question": st.session_state.last_question,
+                    "chat_history": st.session_state.chat_history
+                }
                 
-                # 复制按钮
-                with col_copy:
-                    st.markdown(f'<span class="copy-btn" onclick="copyToClipboard(\'{text.replace("'", "\\'").replace("\n", "\\n")}\')">📋 复制</span>', unsafe_allow_html=True)
+                # 显示处理状态
+                with st.spinner("正在重新生成回答..."):
+                    # 流式输出回答
+                    response = st.write_stream(st.session_state.chain.stream(chain_input))
                 
-                # 点赞/不喜欢
-                with col_feedback:
-                    feedback_key_like = f"like_{message_id}"
-                    feedback_key_dislike = f"dislike_{message_id}"
-                    
-                    if message_id in st.session_state.feedback:
-                        if st.session_state.feedback[message_id] == 'like':
-                            st.write("👍 已点赞")
-                        elif st.session_state.feedback[message_id] == 'dislike':
-                            st.write("👎 已点不喜欢")
-                    else:
-                        if st.button("👍 点赞", key=feedback_key_like):
-                            st.session_state.feedback[message_id] = 'like'
-                            st.rerun()
-                        if st.button("👎 不喜欢", key=feedback_key_dislike):
-                            st.session_state.feedback[message_id] = 'dislike'
-                            st.rerun()
+                # 保存新消息到历史记录
+                st.session_state.messages.append(("assistant", response))
                 
-                # 重新回答
-                with col_regen:
-                    if st.button("🔄 重新回答", key=f"regen_{message_id}"):
-                        # 找到对应的用户问题（前一个消息）
-                        if idx > 0 and st.session_state.messages[idx-1][0] == "user":
-                            prompt = st.session_state.messages[idx-1][1]
-                            # 移除当前回答
-                            st.session_state.messages.pop()
-                            st.session_state.chat_history.pop() if st.session_state.chat_history else None
-                            # 重新生成
-                            chain_input = {
-                                "question": prompt,
-                                "chat_history": st.session_state.chat_history
-                            }
-                            with st.spinner("正在重新生成..."):
-                                new_response = st.session_state.chain.invoke(chain_input)
-                            # 添加新回答
-                            st.session_state.messages.append(("assistant", new_response))
-                            st.session_state.chat_history.append(AIMessage(content=new_response))
-                            # 移除旧反馈如果存在
-                            if message_id in st.session_state.feedback:
-                                del st.session_state.feedback[message_id]
-                            st.rerun()
+                # 更新对话历史
+                st.session_state.chat_history.append(AIMessage(content=response))
+                
+                # 为新回答添加交互按钮
+                new_message_index = len(st.session_state.messages) - 1
+                render_message_actions(new_message_index, response, st.session_state.last_question)
+                
+                # 重置重新生成状态
+                st.session_state.regenerating = False
+                st.session_state.last_question = ""
+                
+            except Exception as e:
+                error_msg = f"重新生成回答时出错: {str(e)}"
+                st.error(error_msg)
+                st.session_state.messages.append(("assistant", "抱歉，重新生成回答时出现了错误。"))
+                st.session_state.regenerating = False
+                st.rerun()
     
     # 用户输入
     if prompt := st.chat_input("请输入你的问题..."):
@@ -505,6 +637,10 @@ def main():
                 # 限制对话历史长度，避免token过多
                 if len(st.session_state.chat_history) > 20:
                     st.session_state.chat_history = st.session_state.chat_history[-20:]
+                
+                # 为新回答添加交互按钮
+                message_index = len(st.session_state.messages) - 1
+                render_message_actions(message_index, response, prompt)
                     
             except Exception as e:
                 error_msg = f"生成回答时出错: {str(e)}"
@@ -516,7 +652,7 @@ def main():
     
     # 底部信息
     st.markdown("---")
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
         st.metric("对话轮数", len(st.session_state.messages) // 2)
     with col2:
@@ -525,6 +661,13 @@ def main():
     with col3:
         memory_count = len(st.session_state.chat_history) // 2
         st.metric("记忆对话数", memory_count)
+    with col4:
+        total_ratings = len(st.session_state.message_ratings)
+        st.metric("评分次数", total_ratings)
+
+    # 添加操作提示
+    if st.session_state.messages:
+        st.info("💡 提示：您可以对AI的回答进行复制📋、点赞👍、踩👎或重新生成🔄操作")
 
 if __name__ == "__main__":
     main()
