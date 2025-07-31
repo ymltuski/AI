@@ -14,7 +14,6 @@ import PyPDF2
 import io
 import time
 import uuid
-import html
 import json
 
 # 页面配置
@@ -109,15 +108,6 @@ st.markdown("""
         background-color: #f8d7da;
         border-color: #f5c6cb;
         color: #721c24;
-    }
-    
-    /* 隐藏的文本区域 */
-    .hidden-textarea {
-        position: absolute;
-        left: -9999px;
-        top: -9999px;
-        opacity: 0;
-        pointer-events: none;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -341,13 +331,10 @@ def regenerate_answer(message_index, original_question):
 # ---------- 复制功能实现 ----------
 def create_copy_button(message_content, message_key):
     """创建复制按钮的HTML和JavaScript"""
-    # 安全地转义文本内容
-    escaped_content = html.escape(message_content)
     # 将内容转换为JSON字符串以确保正确转义
     json_content = json.dumps(message_content)
     
     button_id = f"copy-btn-{message_key}"
-    textarea_id = f"copy-textarea-{message_key}"
     
     copy_html = f"""
     <div style="display: inline-block;">
@@ -359,20 +346,14 @@ def create_copy_button(message_content, message_key):
         >
             📋 复制
         </button>
-        <textarea 
-            id="{textarea_id}" 
-            class="hidden-textarea"
-            readonly
-        >{escaped_content}</textarea>
     </div>
     
     <script>
     function copyToClipboard_{message_key}() {{
         const button = document.getElementById('{button_id}');
-        const textarea = document.getElementById('{textarea_id}');
         const content = {json_content};
         
-        // 方法1: 使用现代的Clipboard API
+        // 使用现代的Clipboard API
         if (navigator.clipboard && window.isSecureContext) {{
             navigator.clipboard.writeText(content).then(function() {{
                 // 成功反馈
@@ -383,59 +364,24 @@ def create_copy_button(message_content, message_key):
                     button.className = 'copy-button';
                 }}, 2000);
             }}).catch(function(err) {{
-                // 失败时使用回退方案
-                fallbackCopy_{message_key}();
+                // 失败反馈
+                button.innerHTML = '❌ 不支持';
+                button.className = 'copy-button error';
+                setTimeout(function() {{
+                    button.innerHTML = '📋 复制';
+                    button.className = 'copy-button';
+                }}, 2000);
+                console.error('复制失败:', err);
             }});
         }} else {{
-            // 方法2: 回退方案，使用document.execCommand
-            fallbackCopy_{message_key}();
-        }}
-    }}
-    
-    function fallbackCopy_{message_key}() {{
-        const button = document.getElementById('{button_id}');
-        const textarea = document.getElementById('{textarea_id}');
-        
-        try {{
-            // 临时显示textarea
-            textarea.style.position = 'fixed';
-            textarea.style.left = '0';
-            textarea.style.top = '0';
-            textarea.style.opacity = '0';
-            textarea.style.pointerEvents = 'none';
-            
-            // 选择并复制文本
-            textarea.select();
-            textarea.setSelectionRange(0, 99999); // 移动端兼容
-            
-            const successful = document.execCommand('copy');
-            
-            if (successful) {{
-                button.innerHTML = '✅ 已复制';
-                button.className = 'copy-button success';
-            }} else {{
-                button.innerHTML = '❌ 复制失败';
-                button.className = 'copy-button error';
-            }}
-            
-            // 恢复按钮状态
-            setTimeout(function() {{
-                button.innerHTML = '📋 复制';
-                button.className = 'copy-button';
-            }}, 2000);
-            
-            // 隐藏textarea
-            textarea.style.position = 'absolute';
-            textarea.style.left = '-9999px';
-            textarea.style.top = '-9999px';
-            
-        }} catch (err) {{
-            button.innerHTML = '❌ 复制失败';
+            // 不支持clipboard API时的提示
+            button.innerHTML = '❌ 不支持';
             button.className = 'copy-button error';
             setTimeout(function() {{
                 button.innerHTML = '📋 复制';
                 button.className = 'copy-button';
             }}, 2000);
+            console.warn('浏览器不支持Clipboard API');
         }}
     }}
     </script>
