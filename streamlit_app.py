@@ -17,7 +17,7 @@ import uuid
 
 # 页面配置
 st.set_page_config(
-    page_title="重庆科技大学", 
+    page_title="动手学大模型应用开发", 
     page_icon="🦜🔗",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -295,6 +295,83 @@ def regenerate_answer(message_index, original_question):
     except Exception as e:
         st.error(f"重新生成回答时出错: {str(e)}")
 
+# ---------- 复制到剪贴板的JavaScript函数 ----------
+def copy_to_clipboard_js(text, message_key):
+    """生成复制到剪贴板的JavaScript代码"""
+    # 转义文本中的特殊字符
+    escaped_text = text.replace('\\', '\\\\').replace('\n', '\\n').replace('\r', '\\r').replace('"', '\\"').replace("'", "\\'")
+    
+    js_code = f"""
+    <script>
+    function copyToClipboard_{message_key}() {{
+        const text = `{escaped_text}`;
+        if (navigator.clipboard && window.isSecureContext) {{
+            navigator.clipboard.writeText(text).then(function() {{
+                // 显示复制成功提示
+                const button = document.querySelector('[data-testid="baseButton-secondary"][title="复制回答"]');
+                if (button) {{
+                    const originalText = button.innerHTML;
+                    button.innerHTML = '✅';
+                    button.style.backgroundColor = '#d4edda';
+                    button.style.color = '#155724';
+                    setTimeout(function() {{
+                        button.innerHTML = originalText;
+                        button.style.backgroundColor = '';
+                        button.style.color = '';
+                    }}, 1500);
+                }}
+            }}).catch(function(err) {{
+                console.error('复制失败: ', err);
+                // 回退方案：使用document.execCommand
+                fallbackCopy_{message_key}(text);
+            }});
+        }} else {{
+            // 回退方案：使用document.execCommand
+            fallbackCopy_{message_key}(text);
+        }}
+    }}
+    
+    function fallbackCopy_{message_key}(text) {{
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        textArea.style.top = '-999999px';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        
+        try {{
+            const result = document.execCommand('copy');
+            if (result) {{
+                // 显示复制成功提示
+                const button = document.querySelector('[data-testid="baseButton-secondary"][title="复制回答"]');
+                if (button) {{
+                    const originalText = button.innerHTML;
+                    button.innerHTML = '✅';
+                    button.style.backgroundColor = '#d4edda';
+                    button.style.color = '#155724';
+                    setTimeout(function() {{
+                        button.innerHTML = originalText;
+                        button.style.backgroundColor = '';
+                        button.style.color = '';
+                    }}, 1500);
+                }}
+            }}
+        }} catch (err) {{
+            console.error('回退复制方案也失败了: ', err);
+            alert('复制失败，请手动复制文本');
+        }}
+        
+        document.body.removeChild(textArea);
+    }}
+    
+    // 立即执行复制
+    copyToClipboard_{message_key}();
+    </script>
+    """
+    return js_code
+
 # ---------- 消息操作按钮组件 ----------
 def render_message_actions(message_index, message_content):
     """渲染消息操作按钮"""
@@ -310,10 +387,12 @@ def render_message_actions(message_index, message_content):
         # 复制按钮
         if st.button("📋", key=f"copy_{message_key}", help="复制回答", 
                     use_container_width=True):
-            # 在Streamlit中，我们可以使用JavaScript来复制文本
-            # 但更简单的方式是显示一个包含文本的文本区域供用户复制
-            st.session_state[f"show_copy_{message_key}"] = True
-            st.rerun()
+            # 使用JavaScript直接复制到剪贴板
+            copy_js = copy_to_clipboard_js(message_content, message_key)
+            st.markdown(copy_js, unsafe_allow_html=True)
+            # 显示简短的成功提示
+            st.success("复制成功！", icon="✅")
+            time.sleep(0.5)  # 短暂延迟让用户看到提示
     
     with col2:
         # 点赞按钮
@@ -351,13 +430,6 @@ def render_message_actions(message_index, message_content):
                     regenerate_answer(message_index - 1, user_question)
     
     st.markdown('</div>', unsafe_allow_html=True)
-    
-    # 显示复制文本框（如果被点击）
-    if st.session_state.get(f"show_copy_{message_key}", False):
-        st.text_area("复制下面的文本:", message_content, height=100, key=f"copy_text_{message_key}")
-        if st.button("关闭", key=f"close_copy_{message_key}"):
-            st.session_state[f"show_copy_{message_key}"] = False
-            st.rerun()
 
 # ---------- 5. 侧边栏功能 ----------
 def setup_sidebar():
@@ -527,7 +599,7 @@ def main():
     # 页面标题
     st.markdown("""
     <div class="main-header">
-        <h1>🦜🔗 重庆科技大学</h1>
+        <h1>🦜🔗 动手学大模型应用开发 - 增强版</h1>
     </div>
     """, unsafe_allow_html=True)
     
