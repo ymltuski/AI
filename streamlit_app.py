@@ -78,7 +78,27 @@ class EnhancedRAGSystem:
             return_messages=True,
             memory_key="chat_history"
         )
+        # 自动加载本地测试文件
+        self.load_initial_document()
         
+    def load_initial_document(self):
+        """自动加载本地的测试.md文件（保持原有功能）"""
+        DOCUMENT_FILE_PATH = "测试.md"
+        if os.path.exists(DOCUMENT_FILE_PATH):
+            try:
+                with open(DOCUMENT_FILE_PATH, "r", encoding="utf-8") as file:
+                    content = file.read()
+                if content.strip():
+                    documents = [Document(page_content=content, metadata={"source": DOCUMENT_FILE_PATH, "filename": "测试.md"})]
+                    split_docs = self.split_documents(documents)
+                    self.initialize_embeddings()
+                    self.vectorstore = FAISS.from_documents(split_docs, self.embeddings)
+                    st.success(f"✅ 已自动加载本地文件：{DOCUMENT_FILE_PATH}")
+            except Exception as e:
+                st.warning(f"⚠️ 无法加载本地文件 {DOCUMENT_FILE_PATH}: {str(e)}")
+        else:
+            st.info("📝 本地测试.md文件不存在，请上传文档来构建知识库")
+    
     def initialize_embeddings(self):
         """初始化嵌入模型"""
         api_key = os.getenv("OPENAI_API_KEY")
@@ -238,8 +258,12 @@ def main():
         if rag_system.vectorstore is not None:
             doc_count = rag_system.vectorstore.index.ntotal
             st.markdown(f'<div class="status-box success-box">✅ 知识库已准备就绪<br>包含 {doc_count} 个文档片段</div>', unsafe_allow_html=True)
+            
+            # 显示本地文件状态
+            if os.path.exists("测试.md"):
+                st.markdown('<div class="status-box info-box">📄 本地测试.md文件已加载</div>', unsafe_allow_html=True)
         else:
-            st.markdown('<div class="status-box warning-box">⚠️ 知识库为空<br>请上传文档来构建知识库</div>', unsafe_allow_html=True)
+            st.markdown('<div class="status-box warning-box">⚠️ 知识库为空<br>请检查测试.md文件或上传新文档</div>', unsafe_allow_html=True)
         
         st.markdown("---")
         
@@ -288,19 +312,37 @@ def main():
         
         st.markdown("---")
         
-        # 清除功能
+        # 清除和重载功能
         col1, col2 = st.columns(2)
         with col1:
+            if st.button("🔄 重载测试.md", use_container_width=True):
+                if os.path.exists("测试.md"):
+                    # 重新初始化系统并加载本地文件
+                    st.session_state.rag_system = EnhancedRAGSystem()
+                    st.success("测试.md文件已重新加载")
+                    st.rerun()
+                else:
+                    st.error("测试.md文件不存在")
+        
+        with col2:
             if st.button("🗑️ 清空知识库", use_container_width=True):
                 st.session_state.rag_system.vectorstore = None
                 st.success("知识库已清空")
                 st.rerun()
         
-        with col2:
+        col3, col4 = st.columns(2)
+        with col3:
             if st.button("💭 清除记忆", use_container_width=True):
                 st.session_state.rag_system.memory.clear()
                 st.session_state.messages = []
                 st.success("对话记忆已清除")
+                st.rerun()
+        
+        with col4:
+            if st.button("🔄 完全重置", use_container_width=True):
+                st.session_state.rag_system = EnhancedRAGSystem()
+                st.session_state.messages = []
+                st.success("系统已完全重置")
                 st.rerun()
         
         # 使用说明
@@ -311,13 +353,21 @@ def main():
         - 🔍 智能检索：从知识库中查找相关信息
         - 🧠 自主回答：知识库无答案时使用AI自身知识
         - 💭 上下文记忆：保持对话连贯性
+        - 📄 本地文件：自动加载测试.md文件
         - 📁 多格式支持：TXT、PDF、Word、CSV等
         - ⚡ 增量更新：随时添加新文档
         
         **使用步骤：**
-        1. 上传相关文档构建知识库
-        2. 开始提问，系统会智能匹配答案
-        3. 支持连续对话和追问
+        1. 系统会自动加载本地的测试.md文件
+        2. 可以上传更多文档扩展知识库
+        3. 开始提问，系统会智能匹配答案
+        4. 支持连续对话和追问
+        
+        **文件管理：**
+        - 🔄 重载测试.md：重新加载本地文件
+        - 📁 上传文档：增加新的知识内容
+        - 🗑️ 清空知识库：移除所有文档
+        - 🔄 完全重置：恢复到初始状态
         """)
     
     # 主聊天区域
@@ -403,11 +453,11 @@ def main():
     st.markdown("---")
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.markdown("💡 **提示**：上传相关文档可获得更准确的答案")
+        st.markdown("📄 **本地文件**：自动加载测试.md文件")
     with col2:
-        st.markdown("🔄 **记忆**：系统会记住对话上下文")
+        st.markdown("🔄 **记忆功能**：系统会记住对话上下文")
     with col3:
-        st.markdown("🤖 **智能**：无答案时使用AI自身知识")
+        st.markdown("🤖 **智能回答**：知识库+AI自身知识")
 
 if __name__ == "__main__":
     main()
