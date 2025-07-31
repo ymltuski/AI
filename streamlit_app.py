@@ -90,17 +90,17 @@ st.markdown("""
     .copy-button {
         background: #f8f9fa;
         border: 1px solid #dee2e6;
-        border-radius: 3px;
-        padding: 1px 4px;
+        border-radius: 4px;
+        padding: 4px 8px;
         cursor: pointer;
-        font-size: 8px;
+        font-size: 12px;
         color: #495057;
         transition: all 0.2s;
         display: inline-flex;
         align-items: center;
-        gap: 1px;
-        height: 16px;
-        min-width: 20px;
+        gap: 2px;
+        height: 28px;
+        min-width: 32px;
     }
     .copy-button:hover {
         background: #e9ecef;
@@ -113,14 +113,14 @@ st.markdown("""
     }
     /* 新增：消息按钮容器样式 */
     .stButton > button {
-        height: 20px !important;
-        min-height: 20px !important;
-        padding: 1px 4px !important;
-        font-size: 8px !important;
-        border-radius: 3px !important;
+        height: 28px !important;
+        min-height: 28px !important;
+        padding: 4px 8px !important;
+        font-size: 12px !important;
+        border-radius: 4px !important;
     }
     .stButton > button div {
-        font-size: 8px !important;
+        font-size: 12px !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -551,9 +551,9 @@ def render_message_actions(message_index, message_text, question=None):
         subcol1, subcol2, subcol3, subcol4 = st.columns(4)
         
         with subcol1:
-            # 复制按钮 - 使用HTML实现，更小尺寸
+            # 复制按钮 - 使用HTML实现，合适尺寸
             copy_button_html = create_copy_button(message_text, f"msg_{message_index}")
-            st.components.v1.html(copy_button_html, height=20)
+            st.components.v1.html(copy_button_html, height=30)
         
         with subcol2:
             # 点赞按钮
