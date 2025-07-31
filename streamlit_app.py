@@ -90,15 +90,17 @@ st.markdown("""
     .copy-button {
         background: #f8f9fa;
         border: 1px solid #dee2e6;
-        border-radius: 4px;
-        padding: 2px 6px;
+        border-radius: 3px;
+        padding: 1px 4px;
         cursor: pointer;
-        font-size: 10px;
+        font-size: 8px;
         color: #495057;
         transition: all 0.2s;
         display: inline-flex;
         align-items: center;
-        gap: 2px;
+        gap: 1px;
+        height: 16px;
+        min-width: 20px;
     }
     .copy-button:hover {
         background: #e9ecef;
@@ -110,23 +112,15 @@ st.markdown("""
         color: #155724;
     }
     /* 新增：消息按钮容器样式 */
-    .message-buttons-container {
-        display: flex;
-        justify-content: flex-end;
-        gap: 4px;
-        margin-top: 8px;
-        margin-bottom: 0;
+    .stButton > button {
+        height: 20px !important;
+        min-height: 20px !important;
+        padding: 1px 4px !important;
+        font-size: 8px !important;
+        border-radius: 3px !important;
     }
-    .small-button {
-        padding: 2px 6px !important;
-        font-size: 10px !important;
-        min-height: 24px !important;
-        height: 24px !important;
-        border-radius: 4px !important;
-        border: 1px solid #ddd !important;
-    }
-    .small-button div {
-        font-size: 10px !important;
+    .stButton > button div {
+        font-size: 8px !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -157,7 +151,7 @@ def create_copy_button(text, button_id):
     
     # 创建HTML结构和JavaScript
     copy_html = f'''
-    <div style="display: inline-block; margin: 0;">
+    <div style="display: inline-block; margin: 0; padding: 0;">
         <button id="copy-btn-{button_id}" class="copy-button" onclick="copyText{button_id}()" style="margin: 0;">
             📋
         </button>
@@ -215,7 +209,7 @@ def create_copy_button(text, button_id):
         setTimeout(function() {{
             button.classList.remove('copied');
             button.innerHTML = '📋';
-        }}, 1500);
+        }}, 1000);
     }}
     
     function showCopyError{button_id}() {{
@@ -223,7 +217,7 @@ def create_copy_button(text, button_id):
         button.innerHTML = '❌';
         setTimeout(function() {{
             button.innerHTML = '📋';
-        }}, 1500);
+        }}, 1000);
     }}
     </script>
     '''
@@ -547,55 +541,51 @@ def setup_sidebar():
 
 # ---------- 消息交互组件 ----------
 def render_message_actions(message_index, message_text, question=None):
-    """渲染消息交互按钮 - 小尺寸右下角布局"""
+    """渲染消息交互按钮 - 小尺寸右下角紧凑布局"""
     
-    # 使用HTML和CSS创建右下角的小按钮组
-    st.markdown('<div class="message-buttons-container">', unsafe_allow_html=True)
+    # 创建一个靠右的容器，只占用必要的宽度
+    _, right_col = st.columns([4, 1])
     
-    # 创建四个小列来放置按钮
-    col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
-    
-    with col1:
-        # 复制按钮 - 使用HTML实现
-        copy_button_html = create_copy_button(message_text, f"msg_{message_index}")
-        st.components.v1.html(copy_button_html, height=25)
-    
-    with col2:
-        # 点赞按钮
-        current_rating = st.session_state.message_ratings.get(message_index, None)
-        like_pressed = current_rating == "like"
+    with right_col:
+        # 创建四个紧凑的小列
+        subcol1, subcol2, subcol3, subcol4 = st.columns(4)
         
-        if st.button("👍", key=f"like_{message_index}", help="点赞", 
-                    type="primary" if like_pressed else "secondary", 
-                    use_container_width=True):
-            if like_pressed:
-                del st.session_state.message_ratings[message_index]
-            else:
-                st.session_state.message_ratings[message_index] = "like"
-            st.rerun()
-    
-    with col3:
-        # 踩按钮
-        dislike_pressed = current_rating == "dislike"
+        with subcol1:
+            # 复制按钮 - 使用HTML实现，更小尺寸
+            copy_button_html = create_copy_button(message_text, f"msg_{message_index}")
+            st.components.v1.html(copy_button_html, height=20)
         
-        if st.button("👎", key=f"dislike_{message_index}", help="踩",
-                    type="primary" if dislike_pressed else "secondary", 
-                    use_container_width=True):
-            if dislike_pressed:
-                del st.session_state.message_ratings[message_index]
-            else:
-                st.session_state.message_ratings[message_index] = "dislike"
-            st.rerun()
-    
-    with col4:
-        # 重新回答按钮（仅对AI回答显示）
-        if question:
-            if st.button("🔄", key=f"regenerate_{message_index}", help="重新生成回答", 
-                        use_container_width=True):
-                regenerate_answer(question)
+        with subcol2:
+            # 点赞按钮
+            current_rating = st.session_state.message_ratings.get(message_index, None)
+            like_pressed = current_rating == "like"
+            
+            if st.button("👍", key=f"like_{message_index}", 
+                        type="primary" if like_pressed else "secondary"):
+                if like_pressed:
+                    del st.session_state.message_ratings[message_index]
+                else:
+                    st.session_state.message_ratings[message_index] = "like"
                 st.rerun()
-    
-    st.markdown('</div>', unsafe_allow_html=True)
+        
+        with subcol3:
+            # 踩按钮
+            dislike_pressed = current_rating == "dislike"
+            
+            if st.button("👎", key=f"dislike_{message_index}",
+                        type="primary" if dislike_pressed else "secondary"):
+                if dislike_pressed:
+                    del st.session_state.message_ratings[message_index]
+                else:
+                    st.session_state.message_ratings[message_index] = "dislike"
+                st.rerun()
+        
+        with subcol4:
+            # 重新回答按钮（仅对AI回答显示）
+            if question:
+                if st.button("🔄", key=f"regenerate_{message_index}"):
+                    regenerate_answer(question)
+                    st.rerun()
 
 # ---------- Streamlit 主界面 ----------
 def main():
