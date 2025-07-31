@@ -91,14 +91,14 @@ st.markdown("""
         background: #f8f9fa;
         border: 1px solid #dee2e6;
         border-radius: 4px;
-        padding: 4px 8px;
+        padding: 2px 6px;
         cursor: pointer;
-        font-size: 12px;
+        font-size: 10px;
         color: #495057;
         transition: all 0.2s;
         display: inline-flex;
         align-items: center;
-        gap: 4px;
+        gap: 2px;
     }
     .copy-button:hover {
         background: #e9ecef;
@@ -108,6 +108,25 @@ st.markdown("""
         background: #d4edda;
         border-color: #c3e6cb;
         color: #155724;
+    }
+    /* 新增：消息按钮容器样式 */
+    .message-buttons-container {
+        display: flex;
+        justify-content: flex-end;
+        gap: 4px;
+        margin-top: 8px;
+        margin-bottom: 0;
+    }
+    .small-button {
+        padding: 2px 6px !important;
+        font-size: 10px !important;
+        min-height: 24px !important;
+        height: 24px !important;
+        border-radius: 4px !important;
+        border: 1px solid #ddd !important;
+    }
+    .small-button div {
+        font-size: 10px !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -138,11 +157,10 @@ def create_copy_button(text, button_id):
     
     # 创建HTML结构和JavaScript
     copy_html = f'''
-    <div style="margin: 5px 0;">
-        <button id="copy-btn-{button_id}" class="copy-button" onclick="copyText{button_id}()">
-            📋 复制
+    <div style="display: inline-block; margin: 0;">
+        <button id="copy-btn-{button_id}" class="copy-button" onclick="copyText{button_id}()" style="margin: 0;">
+            📋
         </button>
-        <span id="copy-status-{button_id}" style="margin-left: 8px; font-size: 12px; color: #28a745; display: none;">✅ 已复制</span>
     </div>
     <script>
     function copyText{button_id}() {{
@@ -190,25 +208,22 @@ def create_copy_button(text, button_id):
     
     function showCopySuccess{button_id}() {{
         const button = document.getElementById('copy-btn-{button_id}');
-        const status = document.getElementById('copy-status-{button_id}');
         
         button.classList.add('copied');
-        button.innerHTML = '✅ 已复制';
-        status.style.display = 'inline';
+        button.innerHTML = '✅';
         
         setTimeout(function() {{
             button.classList.remove('copied');
-            button.innerHTML = '📋 复制';
-            status.style.display = 'none';
-        }}, 2000);
+            button.innerHTML = '📋';
+        }}, 1500);
     }}
     
     function showCopyError{button_id}() {{
         const button = document.getElementById('copy-btn-{button_id}');
-        button.innerHTML = '❌ 复制失败';
+        button.innerHTML = '❌';
         setTimeout(function() {{
-            button.innerHTML = '📋 复制';
-        }}, 2000);
+            button.innerHTML = '📋';
+        }}, 1500);
     }}
     </script>
     '''
@@ -532,14 +547,18 @@ def setup_sidebar():
 
 # ---------- 消息交互组件 ----------
 def render_message_actions(message_index, message_text, question=None):
-    """渲染消息交互按钮"""
-    # 创建一个简洁的按钮行
-    col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
+    """渲染消息交互按钮 - 小尺寸右下角布局"""
+    
+    # 使用HTML和CSS创建右下角的小按钮组
+    st.markdown('<div class="message-buttons-container">', unsafe_allow_html=True)
+    
+    # 创建四个小列来放置按钮
+    col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
     
     with col1:
-        # 使用HTML实现的一键复制按钮
+        # 复制按钮 - 使用HTML实现
         copy_button_html = create_copy_button(message_text, f"msg_{message_index}")
-        st.components.v1.html(copy_button_html, height=40)
+        st.components.v1.html(copy_button_html, height=25)
     
     with col2:
         # 点赞按钮
@@ -547,7 +566,8 @@ def render_message_actions(message_index, message_text, question=None):
         like_pressed = current_rating == "like"
         
         if st.button("👍", key=f"like_{message_index}", help="点赞", 
-                    type="primary" if like_pressed else "secondary", use_container_width=True):
+                    type="primary" if like_pressed else "secondary", 
+                    use_container_width=True):
             if like_pressed:
                 del st.session_state.message_ratings[message_index]
             else:
@@ -559,7 +579,8 @@ def render_message_actions(message_index, message_text, question=None):
         dislike_pressed = current_rating == "dislike"
         
         if st.button("👎", key=f"dislike_{message_index}", help="踩",
-                    type="primary" if dislike_pressed else "secondary", use_container_width=True):
+                    type="primary" if dislike_pressed else "secondary", 
+                    use_container_width=True):
             if dislike_pressed:
                 del st.session_state.message_ratings[message_index]
             else:
@@ -569,9 +590,12 @@ def render_message_actions(message_index, message_text, question=None):
     with col4:
         # 重新回答按钮（仅对AI回答显示）
         if question:
-            if st.button("🔄", key=f"regenerate_{message_index}", help="重新生成回答", use_container_width=True):
+            if st.button("🔄", key=f"regenerate_{message_index}", help="重新生成回答", 
+                        use_container_width=True):
                 regenerate_answer(question)
                 st.rerun()
+    
+    st.markdown('</div>', unsafe_allow_html=True)
 
 # ---------- Streamlit 主界面 ----------
 def main():
