@@ -87,6 +87,28 @@ st.markdown("""
         font-size: 0.8rem;
         margin-left: 0.5rem;
     }
+    .copy-button {
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+        padding: 4px 8px;
+        cursor: pointer;
+        font-size: 12px;
+        color: #495057;
+        transition: all 0.2s;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+    }
+    .copy-button:hover {
+        background: #e9ecef;
+        border-color: #adb5bd;
+    }
+    .copy-button.copied {
+        background: #d4edda;
+        border-color: #c3e6cb;
+        color: #155724;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -108,36 +130,90 @@ def initialize_session_state():
     if "last_question" not in st.session_state:
         st.session_state.last_question = ""
 
-# ---------- 复制到剪贴板功能 ----------
-def add_copy_button(text, button_key):
-    """添加复制按钮"""
-    # 使用JavaScript实现复制功能
-    copy_script = f"""
+# ---------- 一键复制功能 ----------
+def create_copy_button(text, button_id):
+    """创建可以一键复制的按钮"""
+    # 转义文本中的特殊字符
+    escaped_text = text.replace('\\', '\\\\').replace('`', '\\`').replace("'", "\\'").replace('"', '\\"').replace('\n', '\\n').replace('\r', '\\r')
+    
+    # 创建HTML结构和JavaScript
+    copy_html = f'''
+    <div style="margin: 5px 0;">
+        <button id="copy-btn-{button_id}" class="copy-button" onclick="copyText{button_id}()">
+            📋 复制
+        </button>
+        <span id="copy-status-{button_id}" style="margin-left: 8px; font-size: 12px; color: #28a745; display: none;">✅ 已复制</span>
+    </div>
     <script>
-    function copyToClipboard{button_key}() {{
-        const text = `{text.replace('`', '\\`').replace('\\', '\\\\').replace('\n', '\\n')}`;
-        navigator.clipboard.writeText(text).then(function() {{
-            const button = document.getElementById('copy-btn-{button_key}');
-            const originalText = button.innerHTML;
-            button.innerHTML = '✅ 已复制';
-            button.style.color = '#4CAF50';
-            setTimeout(function() {{
-                button.innerHTML = originalText;
-                button.style.color = '';
-            }}, 2000);
-        }}).catch(function(err) {{
-            console.error('复制失败: ', err);
-            alert('复制失败，请手动复制');
-        }});
+    function copyText{button_id}() {{
+        const text = `{escaped_text}`;
+        
+        // 尝试使用现代的 Clipboard API
+        if (navigator.clipboard && window.isSecureContext) {{
+            navigator.clipboard.writeText(text).then(function() {{
+                showCopySuccess{button_id}();
+            }}).catch(function(err) {{
+                console.log('Clipboard API failed, trying fallback...', err);
+                fallbackCopy{button_id}(text);
+            }});
+        }} else {{
+            // 后备方案
+            fallbackCopy{button_id}(text);
+        }}
+    }}
+    
+    function fallbackCopy{button_id}(text) {{
+        // 创建临时文本区域
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        textArea.style.top = '-999999px';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        
+        try {{
+            const successful = document.execCommand('copy');
+            if (successful) {{
+                showCopySuccess{button_id}();
+            }} else {{
+                showCopyError{button_id}();
+            }}
+        }} catch (err) {{
+            console.error('Fallback copy failed:', err);
+            showCopyError{button_id}();
+        }}
+        
+        document.body.removeChild(textArea);
+    }}
+    
+    function showCopySuccess{button_id}() {{
+        const button = document.getElementById('copy-btn-{button_id}');
+        const status = document.getElementById('copy-status-{button_id}');
+        
+        button.classList.add('copied');
+        button.innerHTML = '✅ 已复制';
+        status.style.display = 'inline';
+        
+        setTimeout(function() {{
+            button.classList.remove('copied');
+            button.innerHTML = '📋 复制';
+            status.style.display = 'none';
+        }}, 2000);
+    }}
+    
+    function showCopyError{button_id}() {{
+        const button = document.getElementById('copy-btn-{button_id}');
+        button.innerHTML = '❌ 复制失败';
+        setTimeout(function() {{
+            button.innerHTML = '📋 复制';
+        }}, 2000);
     }}
     </script>
-    <button id="copy-btn-{button_key}" onclick="copyToClipboard{button_key}()" 
-            style="background: none; border: 1px solid #ddd; border-radius: 5px; 
-                   padding: 0.25rem 0.5rem; cursor: pointer; font-size: 0.8rem;">
-        📋 复制
-    </button>
-    """
-    return copy_script
+    '''
+    
+    return copy_html
 
 # ---------- 消息评分功能 ----------
 def handle_message_rating(message_index, rating):
@@ -436,7 +512,7 @@ def setup_sidebar():
             - 🧠 知识融合：找不到时使用AI自身知识回答
             - 💭 对话记忆：记住之前的对话内容
             - 📁 文件上传：支持多种格式文档
-            - 📋 复制答案：一键复制AI回答到剪贴板
+            - 📋 一键复制：直接点击复制AI回答到剪贴板
             - 👍👎 评分系统：对回答进行点赞或踩
             - 🔄 重新回答：不满意可重新生成回答
             
@@ -451,25 +527,19 @@ def setup_sidebar():
             - 大文件处理可能需要几秒钟时间
             - 支持同时上传多个文件
             - 评分数据会用于改进服务质量
+            - 复制功能支持现代浏览器的一键复制
             """)
 
 # ---------- 消息交互组件 ----------
 def render_message_actions(message_index, message_text, question=None):
     """渲染消息交互按钮"""
     # 创建一个简洁的按钮行
-    col1, col2, col3, col4, col5 = st.columns([1, 1, 1, 2, 10])
+    col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
     
     with col1:
-        # 复制按钮 - 使用简洁的图标
-        copy_button = st.button("📄", key=f"copy_{message_index}", help="复制", use_container_width=False)
-        if copy_button:
-            # 使用streamlit的内置方法复制到剪贴板
-            st.write(f"""
-            <script>
-            navigator.clipboard.writeText(`{message_text.replace("`", "\\`").replace("'", "\\'").replace('"', '\\"').replace(chr(10), "\\n")}`);
-            </script>
-            """, unsafe_allow_html=True)
-            st.toast("已复制到剪贴板！", icon="✅")
+        # 使用HTML实现的一键复制按钮
+        copy_button_html = create_copy_button(message_text, f"msg_{message_index}")
+        st.components.v1.html(copy_button_html, height=40)
     
     with col2:
         # 点赞按钮
@@ -477,7 +547,7 @@ def render_message_actions(message_index, message_text, question=None):
         like_pressed = current_rating == "like"
         
         if st.button("👍", key=f"like_{message_index}", help="点赞", 
-                    type="primary" if like_pressed else "secondary", use_container_width=False):
+                    type="primary" if like_pressed else "secondary", use_container_width=True):
             if like_pressed:
                 del st.session_state.message_ratings[message_index]
             else:
@@ -489,7 +559,7 @@ def render_message_actions(message_index, message_text, question=None):
         dislike_pressed = current_rating == "dislike"
         
         if st.button("👎", key=f"dislike_{message_index}", help="踩",
-                    type="primary" if dislike_pressed else "secondary", use_container_width=False):
+                    type="primary" if dislike_pressed else "secondary", use_container_width=True):
             if dislike_pressed:
                 del st.session_state.message_ratings[message_index]
             else:
@@ -499,7 +569,7 @@ def render_message_actions(message_index, message_text, question=None):
     with col4:
         # 重新回答按钮（仅对AI回答显示）
         if question:
-            if st.button("Retry ↻", key=f"regenerate_{message_index}", help="重新生成回答", use_container_width=False):
+            if st.button("🔄", key=f"regenerate_{message_index}", help="重新生成回答", use_container_width=True):
                 regenerate_answer(question)
                 st.rerun()
 
