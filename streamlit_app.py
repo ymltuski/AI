@@ -69,16 +69,16 @@ st.markdown("""
         background: #f8f9fa;
         border: 1px solid #dee2e6;
         border-radius: 6px;
-        padding: 6px 12px;
+        padding: 8px;
         cursor: pointer;
-        font-size: 14px;
+        font-size: 16px;
         color: #495057;
         transition: all 0.2s ease;
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        gap: 4px;
-        min-width: 80px;
+        min-width: 40px;
+        min-height: 40px;
         text-decoration: none;
         font-family: inherit;
     }
@@ -195,28 +195,34 @@ def create_message_actions_html(message_index, message_text, question=None):
     like_class = "liked" if current_rating == "like" else ""
     dislike_class = "disliked" if current_rating == "dislike" else ""
     
+    # 转义question用于URL参数
+    escaped_question = ""
+    if question:
+        import urllib.parse
+        escaped_question = urllib.parse.quote(question)
+    
     # 构建按钮组HTML
     buttons_html = f'''
     <div class="message-actions">
         <!-- 复制按钮 -->
-        <button id="copy-btn-{message_index}" class="action-button copy-button" onclick="copyMessage{message_index}()">
-            📋 复制
+        <button id="copy-btn-{message_index}" class="action-button copy-button" onclick="copyMessage{message_index}()" title="复制">
+            📋
         </button>
         
         <!-- 点赞按钮 -->
-        <button id="like-btn-{message_index}" class="action-button like-button {like_class}" onclick="likeMessage{message_index}()">
-            👍 点赞
+        <button id="like-btn-{message_index}" class="action-button like-button {like_class}" onclick="likeMessage{message_index}()" title="点赞">
+            👍
         </button>
         
         <!-- 踩按钮 -->
-        <button id="dislike-btn-{message_index}" class="action-button dislike-button {dislike_class}" onclick="dislikeMessage{message_index}()">
-            👎 踩
+        <button id="dislike-btn-{message_index}" class="action-button dislike-button {dislike_class}" onclick="dislikeMessage{message_index}()" title="踩">
+            👎
         </button>
         
         <!-- 重新生成按钮（仅对AI回答显示） -->
         {"" if question is None else f'''
-        <button id="regen-btn-{message_index}" class="action-button regenerate-button" onclick="regenerateMessage{message_index}()">
-            🔄 重新回答
+        <button id="regen-btn-{message_index}" class="action-button regenerate-button" onclick="regenerateMessage{message_index}()" title="重新回答">
+            🔄
         </button>
         '''}
         
@@ -229,20 +235,19 @@ def create_message_actions_html(message_index, message_text, question=None):
     function copyMessage{message_index}() {{
         const text = `{escaped_text}`;
         const button = document.getElementById('copy-btn-{message_index}');
-        const status = document.getElementById('status-{message_index}');
         
         if (navigator.clipboard && window.isSecureContext) {{
             navigator.clipboard.writeText(text).then(function() {{
-                showCopySuccess{message_index}(button, status);
+                showCopySuccess{message_index}(button);
             }}).catch(function(err) {{
-                fallbackCopy{message_index}(text, button, status);
+                fallbackCopy{message_index}(text, button);
             }});
         }} else {{
-            fallbackCopy{message_index}(text, button, status);
+            fallbackCopy{message_index}(text, button);
         }}
     }}
     
-    function fallbackCopy{message_index}(text, button, status) {{
+    function fallbackCopy{message_index}(text, button) {{
         const textArea = document.createElement('textarea');
         textArea.value = text;
         textArea.style.position = 'fixed';
@@ -255,94 +260,64 @@ def create_message_actions_html(message_index, message_text, question=None):
         try {{
             const successful = document.execCommand('copy');
             if (successful) {{
-                showCopySuccess{message_index}(button, status);
+                showCopySuccess{message_index}(button);
             }} else {{
-                showError{message_index}(button, '复制失败');
+                showError{message_index}(button, '❌');
             }}
         }} catch (err) {{
-            showError{message_index}(button, '复制失败');
+            showError{message_index}(button, '❌');
         }}
         
         document.body.removeChild(textArea);
     }}
     
-    function showCopySuccess{message_index}(button, status) {{
+    function showCopySuccess{message_index}(button) {{
+        const originalContent = button.innerHTML;
         button.classList.add('copied');
-        button.innerHTML = '✅ 已复制';
+        button.innerHTML = '✅';
         
         setTimeout(function() {{
             button.classList.remove('copied');
-            button.innerHTML = '📋 复制';
+            button.innerHTML = originalContent;
         }}, 2000);
     }}
     
-    function showError{message_index}(button, message) {{
-        button.innerHTML = '❌ ' + message;
+    function showError{message_index}(button, icon) {{
+        const originalContent = button.innerHTML;
+        button.innerHTML = icon;
         setTimeout(function() {{
-            button.innerHTML = '📋 复制';
+            button.innerHTML = originalContent;
         }}, 2000);
     }}
     
     // 点赞功能
     function likeMessage{message_index}() {{
-        // 通过Streamlit的方式触发Python函数
-        const event = new CustomEvent('streamlit:likeMessage', {{
-            detail: {{
-                messageIndex: {message_index},
-                action: 'like'
-            }}
-        }});
-        window.dispatchEvent(event);
-        
-        // 更新UI状态
-        const likeBtn = document.getElementById('like-btn-{message_index}');
-        const dislikeBtn = document.getElementById('dislike-btn-{message_index}');
-        
-        if (likeBtn.classList.contains('liked')) {{
-            likeBtn.classList.remove('liked');
-        }} else {{
-            likeBtn.classList.add('liked');
-            dislikeBtn.classList.remove('disliked');
-        }}
+        // 通过修改URL参数触发页面重载
+        const url = new URL(window.location);
+        url.searchParams.set('like_msg', '{message_index}');
+        window.location.href = url.toString();
     }}
     
-    // 踩功能
+    // 踩功能  
     function dislikeMessage{message_index}() {{
-        const event = new CustomEvent('streamlit:dislikeMessage', {{
-            detail: {{
-                messageIndex: {message_index},
-                action: 'dislike'
-            }}
-        }});
-        window.dispatchEvent(event);
-        
-        // 更新UI状态
-        const likeBtn = document.getElementById('like-btn-{message_index}');
-        const dislikeBtn = document.getElementById('dislike-btn-{message_index}');
-        
-        if (dislikeBtn.classList.contains('disliked')) {{
-            dislikeBtn.classList.remove('disliked');
-        }} else {{
-            dislikeBtn.classList.add('disliked');
-            likeBtn.classList.remove('liked');
-        }}
+        const url = new URL(window.location);
+        url.searchParams.set('dislike_msg', '{message_index}');
+        window.location.href = url.toString();
     }}
     
     {"" if question is None else f'''
     // 重新生成功能
     function regenerateMessage{message_index}() {{
-        const event = new CustomEvent('streamlit:regenerateMessage', {{
-            detail: {{
-                messageIndex: {message_index},
-                question: `{question.replace('`', '\\`').replace("'", "\\'").replace('"', '\\"') if question else ""}`
-            }}
-        }});
-        window.dispatchEvent(event);
+        const url = new URL(window.location);
+        url.searchParams.set('regen_msg', '{message_index}');
+        url.searchParams.set('regen_question', '{escaped_question}');
         
         // 显示加载状态
         const button = document.getElementById('regen-btn-{message_index}');
-        button.innerHTML = '⏳ 生成中...';
+        button.innerHTML = '⏳';
         button.disabled = true;
+        
+        window.location.href = url.toString();
     }}
     '''}
     </script>
