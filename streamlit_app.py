@@ -87,46 +87,27 @@ st.markdown("""
         font-size: 0.8rem;
         margin-left: 0.5rem;
     }
-    /* 让复制按钮样式与Streamlit按钮保持一致 */
     .copy-button {
-        background-color: rgb(255, 255, 255) !important;
-        border: none !important;
-        border-radius: 0.5rem !important;
-        color: rgb(49, 51, 63) !important;
-        padding: 0.25rem 0.75rem !important;
-        font-size: 0.875rem !important;
-        font-weight: 400 !important;
-        height: 38px !important;
-        min-height: 38px !important;
-        display: inline-flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-        cursor: pointer !important;
-        transition: all 0.2s !important;
-        text-decoration: none !important;
-        width: 100% !important;
-        box-sizing: border-box !important;
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+        padding: 4px 8px;
+        cursor: pointer;
+        font-size: 12px;
+        color: #495057;
+        transition: all 0.2s;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
     }
-    
     .copy-button:hover {
-        color: rgb(255, 75, 75) !important;
-        background-color: rgb(255, 255, 255) !important;
+        background: #e9ecef;
+        border-color: #adb5bd;
     }
-    
     .copy-button.copied {
-        background-color: rgb(19, 23, 32) !important;
-        color: rgb(255, 255, 255) !important;
-    }
-    /* 新增：消息按钮容器样式 */
-    .stButton > button {
-        height: 28px !important;
-        min-height: 28px !important;
-        padding: 4px 8px !important;
-        font-size: 12px !important;
-        border-radius: 4px !important;
-    }
-    .stButton > button div {
-        font-size: 12px !important;
+        background: #d4edda;
+        border-color: #c3e6cb;
+        color: #155724;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -157,10 +138,11 @@ def create_copy_button(text, button_id):
     
     # 创建HTML结构和JavaScript
     copy_html = f'''
-    <div style="display: inline-block; margin: 0; padding: 0;">
-        <button id="copy-btn-{button_id}" class="copy-button" onclick="copyText{button_id}()" style="margin: 0;">
-            📋
+    <div style="margin: 5px 0;">
+        <button id="copy-btn-{button_id}" class="copy-button" onclick="copyText{button_id}()">
+            📋 复制
         </button>
+        <span id="copy-status-{button_id}" style="margin-left: 8px; font-size: 12px; color: #28a745; display: none;">✅ 已复制</span>
     </div>
     <script>
     function copyText{button_id}() {{
@@ -208,22 +190,25 @@ def create_copy_button(text, button_id):
     
     function showCopySuccess{button_id}() {{
         const button = document.getElementById('copy-btn-{button_id}');
+        const status = document.getElementById('copy-status-{button_id}');
         
         button.classList.add('copied');
-        button.innerHTML = '✅';
+        button.innerHTML = '✅ 已复制';
+        status.style.display = 'inline';
         
         setTimeout(function() {{
             button.classList.remove('copied');
-            button.innerHTML = '📋';
-        }}, 1000);
+            button.innerHTML = '📋 复制';
+            status.style.display = 'none';
+        }}, 2000);
     }}
     
     function showCopyError{button_id}() {{
         const button = document.getElementById('copy-btn-{button_id}');
-        button.innerHTML = '❌';
+        button.innerHTML = '❌ 复制失败';
         setTimeout(function() {{
-            button.innerHTML = '📋';
-        }}, 1000);
+            button.innerHTML = '📋 复制';
+        }}, 2000);
     }}
     </script>
     '''
@@ -547,51 +532,46 @@ def setup_sidebar():
 
 # ---------- 消息交互组件 ----------
 def render_message_actions(message_index, message_text, question=None):
-    """渲染消息交互按钮 - 小尺寸右下角紧凑布局"""
+    """渲染消息交互按钮"""
+    # 创建一个简洁的按钮行
+    col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
     
-    # 创建一个靠右的容器，只占用必要的宽度
-    _, right_col = st.columns([4, 1])
+    with col1:
+        # 使用HTML实现的一键复制按钮
+        copy_button_html = create_copy_button(message_text, f"msg_{message_index}")
+        st.components.v1.html(copy_button_html, height=40)
     
-    with right_col:
-        # 创建四个紧凑的小列
-        subcol1, subcol2, subcol3, subcol4 = st.columns(4)
+    with col2:
+        # 点赞按钮
+        current_rating = st.session_state.message_ratings.get(message_index, None)
+        like_pressed = current_rating == "like"
         
-        with subcol1:
-            # 复制按钮 - 使用HTML实现，合适尺寸
-            copy_button_html = create_copy_button(message_text, f"msg_{message_index}")
-            st.components.v1.html(copy_button_html, height=30)
+        if st.button("👍", key=f"like_{message_index}", help="点赞", 
+                    type="primary" if like_pressed else "secondary", use_container_width=True):
+            if like_pressed:
+                del st.session_state.message_ratings[message_index]
+            else:
+                st.session_state.message_ratings[message_index] = "like"
+            st.rerun()
+    
+    with col3:
+        # 踩按钮
+        dislike_pressed = current_rating == "dislike"
         
-        with subcol2:
-            # 点赞按钮
-            current_rating = st.session_state.message_ratings.get(message_index, None)
-            like_pressed = current_rating == "like"
-            
-            if st.button("👍", key=f"like_{message_index}", 
-                        type="primary" if like_pressed else "secondary"):
-                if like_pressed:
-                    del st.session_state.message_ratings[message_index]
-                else:
-                    st.session_state.message_ratings[message_index] = "like"
+        if st.button("👎", key=f"dislike_{message_index}", help="踩",
+                    type="primary" if dislike_pressed else "secondary", use_container_width=True):
+            if dislike_pressed:
+                del st.session_state.message_ratings[message_index]
+            else:
+                st.session_state.message_ratings[message_index] = "dislike"
+            st.rerun()
+    
+    with col4:
+        # 重新回答按钮（仅对AI回答显示）
+        if question:
+            if st.button("🔄", key=f"regenerate_{message_index}", help="重新生成回答", use_container_width=True):
+                regenerate_answer(question)
                 st.rerun()
-        
-        with subcol3:
-            # 踩按钮
-            dislike_pressed = current_rating == "dislike"
-            
-            if st.button("👎", key=f"dislike_{message_index}",
-                        type="primary" if dislike_pressed else "secondary"):
-                if dislike_pressed:
-                    del st.session_state.message_ratings[message_index]
-                else:
-                    st.session_state.message_ratings[message_index] = "dislike"
-                st.rerun()
-        
-        with subcol4:
-            # 重新回答按钮（仅对AI回答显示）
-            if question:
-                if st.button("🔄", key=f"regenerate_{message_index}"):
-                    regenerate_answer(question)
-                    st.rerun()
 
 # ---------- Streamlit 主界面 ----------
 def main():
