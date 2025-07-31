@@ -152,53 +152,76 @@ def initialize_session_state():
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = []
     
-    if "regenerate_request" not in st.session_state:
-        st.session_state.regenerate_request = None
+    # 用于存储重新生成的请求
+    if "regenerate_question" not in st.session_state:
+        st.session_state.regenerate_question = None
+    
+    if "regenerate_index" not in st.session_state:
+        st.session_state.regenerate_index = None
 
-# ---------- HTML按钮组件 ----------
-def create_message_actions_html(message_index, message_text, question=None):
-    """创建消息操作按钮组的HTML"""
+# ---------- 重新生成功能的Streamlit组件 ----------
+def create_message_actions(message_index, message_text, question=None):
+    """创建消息操作按钮组"""
+    col1, col2, col3 = st.columns([2, 2, 6])
+    
+    with col1:
+        # 复制按钮
+        if st.button("📋 复制", key=f"copy_{message_index}", help="复制消息到剪贴板"):
+            # 使用JavaScript复制功能
+            copy_js = f"""
+            <script>
+            navigator.clipboard.writeText(`{message_text.replace('`', '\\`').replace('\\', '\\\\')}`).then(function() {{
+                console.log('复制成功');
+            }}).catch(function(err) {{
+                console.error('复制失败:', err);
+            }});
+            </script>
+            """
+            st.components.v1.html(copy_js, height=0)
+            st.success("已复制到剪贴板！", icon="✅")
+    
+    with col2:
+        # 重新生成按钮（仅对AI回答显示）
+        if question is not None:
+            if st.button("🔄 重新回答", key=f"regen_{message_index}", help="重新生成回答"):
+                # 设置重新生成的请求
+                st.session_state.regenerate_question = question
+                st.session_state.regenerate_index = message_index
+                st.rerun()
+
+# ---------- 简化的HTML复制按钮 ----------
+def create_copy_button_html(message_index, message_text):
+    """创建简单的复制按钮HTML"""
     # 转义文本中的特殊字符
     escaped_text = message_text.replace('\\', '\\\\').replace('`', '\\`').replace("'", "\\'").replace('"', '\\"').replace('\n', '\\n').replace('\r', '\\r')
     
-    # 构建按钮组HTML
-    buttons_html = f'''
-    <div class="message-actions">
-        <!-- 复制按钮 -->
-        <button id="copy-btn-{message_index}" class="action-button copy-button" onclick="copyMessage{message_index}()">
-            📋 复制
+    copy_html = f'''
+    <div style="margin: 10px 0;">
+        <button onclick="copyToClipboard{message_index}()" 
+                style="background: #007bff; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 14px;">
+            📋 复制回答
         </button>
-        
-        <!-- 重新生成按钮（仅对AI回答显示） -->
-        {"" if question is None else f'''
-        <button id="regen-btn-{message_index}" class="action-button regenerate-button" onclick="regenerateMessage{message_index}()">
-            🔄 重新回答
-        </button>
-        '''}
-        
-        <!-- 状态提示 -->
-        <span id="status-{message_index}" class="status-message"></span>
+        <span id="copy-status-{message_index}" style="margin-left: 10px; color: #28a745; font-size: 12px;"></span>
     </div>
     
     <script>
-    // 复制功能
-    function copyMessage{message_index}() {{
+    function copyToClipboard{message_index}() {{
         const text = `{escaped_text}`;
-        const button = document.getElementById('copy-btn-{message_index}');
-        const status = document.getElementById('status-{message_index}');
+        const statusElement = document.getElementById('copy-status-{message_index}');
         
         if (navigator.clipboard && window.isSecureContext) {{
             navigator.clipboard.writeText(text).then(function() {{
-                showCopySuccess{message_index}(button, status);
+                statusElement.textContent = '✅ 已复制';
+                setTimeout(() => statusElement.textContent = '', 2000);
             }}).catch(function(err) {{
-                fallbackCopy{message_index}(text, button, status);
+                fallbackCopy{message_index}(text, statusElement);
             }});
         }} else {{
-            fallbackCopy{message_index}(text, button, status);
+            fallbackCopy{message_index}(text, statusElement);
         }}
     }}
     
-    function fallbackCopy{message_index}(text, button, status) {{
+    function fallbackCopy{message_index}(text, statusElement) {{
         const textArea = document.createElement('textarea');
         textArea.value = text;
         textArea.style.position = 'fixed';
@@ -211,147 +234,58 @@ def create_message_actions_html(message_index, message_text, question=None):
         try {{
             const successful = document.execCommand('copy');
             if (successful) {{
-                showCopySuccess{message_index}(button, status);
+                statusElement.textContent = '✅ 已复制';
             }} else {{
-                showError{message_index}(button, '复制失败');
+                statusElement.textContent = '❌ 复制失败';
             }}
         }} catch (err) {{
-            showError{message_index}(button, '复制失败');
+            statusElement.textContent = '❌ 复制失败';
         }}
         
         document.body.removeChild(textArea);
+        setTimeout(() => statusElement.textContent = '', 2000);
     }}
-    
-    function showCopySuccess{message_index}(button, status) {{
-        button.classList.add('copied');
-        button.innerHTML = '✅ 已复制';
-        
-        setTimeout(function() {{
-            button.classList.remove('copied');
-            button.innerHTML = '📋 复制';
-        }}, 2000);
-    }}
-    
-    function showError{message_index}(button, message) {{
-        button.innerHTML = '❌ ' + message;
-        setTimeout(function() {{
-            button.innerHTML = '📋 复制';
-        }}, 2000);
-    }}
-    
-    {"" if question is None else f'''
-    // 重新生成功能
-    function regenerateMessage{message_index}() {{
-        // 更新按钮状态
-        const button = document.getElementById('regen-btn-{message_index}');
-        button.innerHTML = '⏳ 生成中...';
-        button.classList.add('loading');
-        button.disabled = true;
-        
-        // 设置重新生成请求
-        const questionText = `{question.replace('\\', '\\\\').replace('`', '\\`').replace("'", "\\'").replace('"', '\\"').replace('\n', '\\n').replace('\r', '\\r') if question else ""}`;
-        
-        // 使用 Streamlit 的方式通知 Python 后端
-        // 创建隐藏的表单提交来触发重新渲染
-        const form = document.createElement('form');
-        form.method = 'POST';
-        form.style.display = 'none';
-        
-        const input = document.createElement('input');
-        input.type = 'hidden';
-        input.name = 'regenerate_question';
-        input.value = questionText;
-        
-        const messageIndexInput = document.createElement('input');
-        messageIndexInput.type = 'hidden';
-        messageIndexInput.name = 'regenerate_message_index';
-        messageIndexInput.value = '{message_index}';
-        
-        form.appendChild(input);
-        form.appendChild(messageIndexInput);
-        document.body.appendChild(form);
-        
-        // 使用 Streamlit 的 JavaScript API（如果可用）
-        if (window.streamlit) {{
-            window.streamlit.setComponentValue({{
-                action: 'regenerate',
-                question: questionText,
-                messageIndex: {message_index}
-            }});
-        }} else {{
-            // 备用方案：使用查询参数
-            const url = new URL(window.location);
-            url.searchParams.set('regenerate_question', questionText);
-            url.searchParams.set('regenerate_message_index', '{message_index}');
-            window.location = url.toString();
-        }}
-    }}
-    '''}
     </script>
     '''
     
-    return buttons_html
+    return copy_html
 
-# ---------- 重新生成回答功能 ----------
+# ---------- 处理重新生成请求 ----------
 def handle_regenerate_request():
-    """处理重新生成请求"""
-    # 检查查询参数
-    query_params = st.query_params
-    
-    if 'regenerate_question' in query_params and 'regenerate_message_index' in query_params:
+    """处理重新生成回答的请求"""
+    if st.session_state.regenerate_question is not None and st.session_state.regenerate_index is not None:
+        question = st.session_state.regenerate_question
+        message_index = st.session_state.regenerate_index
+        
         try:
-            question = query_params['regenerate_question']
-            message_index = int(query_params['regenerate_message_index'])
-            
-            # 设置重新生成请求
-            st.session_state.regenerate_request = {
-                'question': question,
-                'message_index': message_index
-            }
-            
-            # 清除查询参数
-            st.query_params.clear()
-            
-            return True
+            # 找到对应的问题在messages中的位置
+            # message_index是AI回答的索引，对应的问题应该在前一个位置
+            if message_index > 0 and message_index < len(st.session_state.messages):
+                # 移除要重新生成的AI回答
+                st.session_state.messages = st.session_state.messages[:message_index]
+                
+                # 同样调整对话历史
+                # 每个用户问题对应一个 HumanMessage 和一个 AIMessage
+                pairs_to_keep = message_index // 2
+                st.session_state.chat_history = st.session_state.chat_history[:pairs_to_keep * 2]
+                
+                # 添加问题（如果还没有）
+                if not st.session_state.messages or st.session_state.messages[-1][0] != "user":
+                    st.session_state.messages.append(("user", question))
+                    st.session_state.chat_history.append(HumanMessage(content=question))
+                
+                # 清除重新生成请求
+                st.session_state.regenerate_question = None
+                st.session_state.regenerate_index = None
+                
+                return question  # 返回问题以便重新生成回答
+                
         except Exception as e:
             st.error(f"处理重新生成请求时出错: {e}")
-            return False
+            st.session_state.regenerate_question = None
+            st.session_state.regenerate_index = None
     
-    return False
-
-def process_regenerate_request():
-    """处理重新生成回答"""
-    if st.session_state.regenerate_request is None:
-        return False
-    
-    request = st.session_state.regenerate_request
-    question = request['question']
-    message_index = request['message_index']
-    
-    try:
-        # 移除指定索引之后的所有消息（包括要重新生成的消息）
-        st.session_state.messages = st.session_state.messages[:message_index]
-        
-        # 同样调整对话历史
-        # 计算对话历史中需要保留的消息数量
-        # 每个用户问题对应一个 HumanMessage 和一个 AIMessage
-        target_pairs = message_index // 2
-        st.session_state.chat_history = st.session_state.chat_history[:target_pairs * 2]
-        
-        # 添加用户问题（如果不存在）
-        if not st.session_state.messages or st.session_state.messages[-1][0] != "user":
-            st.session_state.messages.append(("user", question))
-            st.session_state.chat_history.append(HumanMessage(content=question))
-        
-        # 清除重新生成请求
-        st.session_state.regenerate_request = None
-        
-        return True
-        
-    except Exception as e:
-        st.error(f"处理重新生成请求时出错: {e}")
-        st.session_state.regenerate_request = None
-        return False
+    return None
 
 # ---------- 从本地 Markdown 文件获取文档内容 ----------
 def fetch_document_from_file(file_path):
@@ -605,7 +539,8 @@ def setup_sidebar():
         if st.button("🗑️ 清除对话历史", use_container_width=True):
             st.session_state.messages = []
             st.session_state.chat_history = []
-            st.session_state.regenerate_request = None
+            st.session_state.regenerate_question = None
+            st.session_state.regenerate_index = None
             st.success("对话历史已清除！")
             st.rerun()
         
@@ -646,13 +581,64 @@ def setup_sidebar():
             - 重新回答会基于相同问题生成新答案
             """)
 
+# ---------- 生成AI回答的函数 ----------
+def generate_ai_response(prompt, msgs):
+    """生成AI回答"""
+    try:
+        # 准备输入数据，包含对话历史
+        chain_input = {
+            "question": prompt,
+            "chat_history": st.session_state.chat_history
+        }
+        
+        # 显示处理状态
+        with st.spinner("正在思考中..."):
+            # 流式输出回答
+            response = st.write_stream(st.session_state.chain.stream(chain_input))
+        
+        # 保存消息到历史记录
+        st.session_state.messages.append(("assistant", response))
+        
+        # 更新对话历史（用于记忆功能）
+        st.session_state.chat_history.extend([
+            HumanMessage(content=prompt),
+            AIMessage(content=response)
+        ])
+        
+        # 限制对话历史长度，避免token过多
+        if len(st.session_state.chat_history) > 20:
+            st.session_state.chat_history = st.session_state.chat_history[-20:]
+        
+        # 添加复制按钮和重新生成按钮
+        message_index = len(st.session_state.messages) - 1
+        
+        # 使用列布局创建按钮
+        col1, col2, col3 = st.columns([2, 2, 6])
+        
+        with col1:
+            # 添加HTML复制按钮
+            copy_html = create_copy_button_html(message_index, response)
+            st.components.v1.html(copy_html, height=50)
+        
+        with col2:
+            # 重新生成按钮
+            if st.button("🔄 重新回答", key=f"regen_new_{message_index}", help="重新生成回答"):
+                st.session_state.regenerate_question = prompt
+                st.session_state.regenerate_index = message_index
+                st.rerun()
+                
+    except Exception as e:
+        error_msg = f"生成回答时出错: {str(e)}"
+        st.error(error_msg)
+        st.session_state.messages.append(("assistant", "抱歉，生成回答时出现了错误。请检查网络连接和API密钥。"))
+        # 显示详细错误信息供调试
+        with st.expander("错误详情"):
+            st.code(str(e))
+
 # ---------- Streamlit 主界面 ----------
 def main():
     # 初始化会话状态
     initialize_session_state()
-    
-    # 处理重新生成请求
-    regenerate_triggered = handle_regenerate_request()
     
     # 页面标题
     st.markdown("""
@@ -671,28 +657,46 @@ def main():
     # 主聊天区域
     st.markdown("### 💬 智能问答")
     
+    # 处理重新生成请求
+    regenerate_question = handle_regenerate_request()
+    
     # 聊天消息容器
     msgs = st.container(height=500)
-    
-    # 处理重新生成请求
-    if process_regenerate_request():
-        st.rerun()
     
     # 显示聊天历史
     for i, (role, text) in enumerate(st.session_state.messages):
         with msgs.chat_message(role):
             st.write(text)
             
-            # 为AI回答添加HTML按钮组
+            # 为AI回答添加操作按钮
             if role == "assistant":
                 # 寻找对应的用户问题
                 question = None
                 if i > 0 and st.session_state.messages[i-1][0] == "user":
                     question = st.session_state.messages[i-1][1]
                 
-                # 渲染HTML按钮组
-                buttons_html = create_message_actions_html(i, text, question)
-                st.components.v1.html(buttons_html, height=60)
+                # 创建按钮列
+                col1, col2, col3 = st.columns([2, 2, 6])
+                
+                with col1:
+                    # 添加HTML复制按钮
+                    copy_html = create_copy_button_html(i, text)
+                    st.components.v1.html(copy_html, height=50)
+                
+                with col2:
+                    # 重新生成按钮
+                    if question is not None:
+                        if st.button("🔄 重新回答", key=f"regen_history_{i}", help="重新生成回答"):
+                            st.session_state.regenerate_question = question
+                            st.session_state.regenerate_index = i
+                            st.rerun()
+    
+    # 如果有重新生成请求，先处理它
+    if regenerate_question:
+        with msgs.chat_message("assistant"):
+            st.info("🔄 正在重新生成回答...")
+            generate_ai_response(regenerate_question, msgs)
+        st.rerun()
     
     # 用户输入
     if prompt := st.chat_input("请输入你的问题..."):
@@ -703,43 +707,7 @@ def main():
         
         # 生成AI回答
         with msgs.chat_message("assistant"):
-            try:
-                # 准备输入数据，包含对话历史
-                chain_input = {
-                    "question": prompt,
-                    "chat_history": st.session_state.chat_history
-                }
-                
-                # 显示处理状态
-                with st.spinner("正在思考中..."):
-                    # 流式输出回答
-                    response = st.write_stream(st.session_state.chain.stream(chain_input))
-                
-                # 保存消息到历史记录
-                st.session_state.messages.append(("assistant", response))
-                
-                # 更新对话历史（用于记忆功能）
-                st.session_state.chat_history.extend([
-                    HumanMessage(content=prompt),
-                    AIMessage(content=response)
-                ])
-                
-                # 限制对话历史长度，避免token过多
-                if len(st.session_state.chat_history) > 20:
-                    st.session_state.chat_history = st.session_state.chat_history[-20:]
-                
-                # 为新回答添加HTML按钮组
-                message_index = len(st.session_state.messages) - 1
-                buttons_html = create_message_actions_html(message_index, response, prompt)
-                st.components.v1.html(buttons_html, height=60)
-                    
-            except Exception as e:
-                error_msg = f"生成回答时出错: {str(e)}"
-                st.error(error_msg)
-                st.session_state.messages.append(("assistant", "抱歉，生成回答时出现了错误。请检查网络连接和API密钥。"))
-                # 显示详细错误信息供调试
-                with st.expander("错误详情"):
-                    st.code(str(e))
+            generate_ai_response(prompt, msgs)
     
     # 底部信息
     st.markdown("---")
