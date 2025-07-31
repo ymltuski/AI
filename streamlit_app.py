@@ -69,16 +69,16 @@ st.markdown("""
         background: #f8f9fa;
         border: 1px solid #dee2e6;
         border-radius: 6px;
-        padding: 8px;
+        padding: 6px 12px;
         cursor: pointer;
-        font-size: 16px;
+        font-size: 14px;
         color: #495057;
         transition: all 0.2s ease;
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        min-width: 40px;
-        min-height: 40px;
+        gap: 4px;
+        min-width: 80px;
         text-decoration: none;
         font-family: inherit;
     }
@@ -183,10 +183,172 @@ def initialize_session_state():
     
     if "last_question" not in st.session_state:
         st.session_state.last_question = ""
+
+# ---------- HTML按钮组件 ----------
+def create_message_actions_html(message_index, message_text, question=None):
+    """创建消息操作按钮组的HTML"""
+    # 转义文本中的特殊字符
+    escaped_text = message_text.replace('\\', '\\\\').replace('`', '\\`').replace("'", "\\'").replace('"', '\\"').replace('\n', '\\n').replace('\r', '\\r')
     
-    # 添加用于处理按钮点击的状态
-    if "button_clicked" not in st.session_state:
-        st.session_state.button_clicked = None
+    # 获取当前评分状态
+    current_rating = st.session_state.message_ratings.get(message_index, None)
+    like_class = "liked" if current_rating == "like" else ""
+    dislike_class = "disliked" if current_rating == "dislike" else ""
+    
+    # 构建按钮组HTML
+    buttons_html = f'''
+    <div class="message-actions">
+        <!-- 复制按钮 -->
+        <button id="copy-btn-{message_index}" class="action-button copy-button" onclick="copyMessage{message_index}()">
+            📋 复制
+        </button>
+        
+        <!-- 点赞按钮 -->
+        <button id="like-btn-{message_index}" class="action-button like-button {like_class}" onclick="likeMessage{message_index}()">
+            👍 点赞
+        </button>
+        
+        <!-- 踩按钮 -->
+        <button id="dislike-btn-{message_index}" class="action-button dislike-button {dislike_class}" onclick="dislikeMessage{message_index}()">
+            👎 踩
+        </button>
+        
+        <!-- 重新生成按钮（仅对AI回答显示） -->
+        {"" if question is None else f'''
+        <button id="regen-btn-{message_index}" class="action-button regenerate-button" onclick="regenerateMessage{message_index}()">
+            🔄 重新回答
+        </button>
+        '''}
+        
+        <!-- 状态提示 -->
+        <span id="status-{message_index}" class="status-message"></span>
+    </div>
+    
+    <script>
+    // 复制功能
+    function copyMessage{message_index}() {{
+        const text = `{escaped_text}`;
+        const button = document.getElementById('copy-btn-{message_index}');
+        const status = document.getElementById('status-{message_index}');
+        
+        if (navigator.clipboard && window.isSecureContext) {{
+            navigator.clipboard.writeText(text).then(function() {{
+                showCopySuccess{message_index}(button, status);
+            }}).catch(function(err) {{
+                fallbackCopy{message_index}(text, button, status);
+            }});
+        }} else {{
+            fallbackCopy{message_index}(text, button, status);
+        }}
+    }}
+    
+    function fallbackCopy{message_index}(text, button, status) {{
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        textArea.style.top = '-999999px';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        
+        try {{
+            const successful = document.execCommand('copy');
+            if (successful) {{
+                showCopySuccess{message_index}(button, status);
+            }} else {{
+                showError{message_index}(button, '复制失败');
+            }}
+        }} catch (err) {{
+            showError{message_index}(button, '复制失败');
+        }}
+        
+        document.body.removeChild(textArea);
+    }}
+    
+    function showCopySuccess{message_index}(button, status) {{
+        button.classList.add('copied');
+        button.innerHTML = '✅ 已复制';
+        
+        setTimeout(function() {{
+            button.classList.remove('copied');
+            button.innerHTML = '📋 复制';
+        }}, 2000);
+    }}
+    
+    function showError{message_index}(button, message) {{
+        button.innerHTML = '❌ ' + message;
+        setTimeout(function() {{
+            button.innerHTML = '📋 复制';
+        }}, 2000);
+    }}
+    
+    // 点赞功能
+    function likeMessage{message_index}() {{
+        // 通过Streamlit的方式触发Python函数
+        const event = new CustomEvent('streamlit:likeMessage', {{
+            detail: {{
+                messageIndex: {message_index},
+                action: 'like'
+            }}
+        }});
+        window.dispatchEvent(event);
+        
+        // 更新UI状态
+        const likeBtn = document.getElementById('like-btn-{message_index}');
+        const dislikeBtn = document.getElementById('dislike-btn-{message_index}');
+        
+        if (likeBtn.classList.contains('liked')) {{
+            likeBtn.classList.remove('liked');
+        }} else {{
+            likeBtn.classList.add('liked');
+            dislikeBtn.classList.remove('disliked');
+        }}
+    }}
+    
+    // 踩功能
+    function dislikeMessage{message_index}() {{
+        const event = new CustomEvent('streamlit:dislikeMessage', {{
+            detail: {{
+                messageIndex: {message_index},
+                action: 'dislike'
+            }}
+        }});
+        window.dispatchEvent(event);
+        
+        // 更新UI状态
+        const likeBtn = document.getElementById('like-btn-{message_index}');
+        const dislikeBtn = document.getElementById('dislike-btn-{message_index}');
+        
+        if (dislikeBtn.classList.contains('disliked')) {{
+            dislikeBtn.classList.remove('disliked');
+        }} else {{
+            dislikeBtn.classList.add('disliked');
+            likeBtn.classList.remove('liked');
+        }}
+    }}
+    
+    {"" if question is None else f'''
+    // 重新生成功能
+    function regenerateMessage{message_index}() {{
+        const event = new CustomEvent('streamlit:regenerateMessage', {{
+            detail: {{
+                messageIndex: {message_index},
+                question: `{question.replace('`', '\\`').replace("'", "\\'").replace('"', '\\"') if question else ""}`
+            }}
+        }});
+        window.dispatchEvent(event);
+        
+        // 显示加载状态
+        const button = document.getElementById('regen-btn-{message_index}');
+        button.innerHTML = '⏳ 生成中...';
+        button.disabled = true;
+    }}
+    '''}
+    </script>
+    '''
+    
+    return buttons_html
 
 # ---------- 消息评分功能 ----------
 def handle_message_rating(message_index, rating):
@@ -216,90 +378,6 @@ def regenerate_answer(question):
     # 移除对话历史中的最后一条AI消息
     if st.session_state.chat_history and isinstance(st.session_state.chat_history[-1], AIMessage):
         st.session_state.chat_history.pop()
-
-# ---------- 创建按钮组件 ----------
-def create_message_actions(message_index, message_text, question=None):
-    """创建消息操作按钮组"""
-    col1, col2, col3, col4, col5 = st.columns([1, 1, 1, 1, 6])
-    
-    # 获取当前评分状态
-    current_rating = st.session_state.message_ratings.get(message_index, None)
-    
-    with col1:
-        # 复制按钮 - 使用JavaScript实现
-        # 清理文本中的特殊字符以避免JavaScript错误
-        clean_text = message_text.replace('"', '\\"').replace("'", "\\'").replace('\n', '\\n').replace('\r', '\\r').replace('`', '\\`')
-        copy_html = f'''
-        <button onclick="copyToClipboard{message_index}()" style="
-            background: #007bff;
-            color: white;
-            border: 1px solid #007bff;
-            border-radius: 6px;
-            padding: 8px;
-            cursor: pointer;
-            font-size: 16px;
-            min-width: 40px;
-            min-height: 40px;
-        " title="复制">📋</button>
-        <script>
-        function copyToClipboard{message_index}() {{
-            const text = "{clean_text}";
-            if (navigator.clipboard) {{
-                navigator.clipboard.writeText(text).then(function() {{
-                    alert('复制成功！');
-                }}).catch(function(err) {{
-                    console.error('复制失败:', err);
-                    fallbackCopy{message_index}(text);
-                }});
-            }} else {{
-                fallbackCopy{message_index}(text);
-            }}
-        }}
-        
-        function fallbackCopy{message_index}(text) {{
-            const textArea = document.createElement('textarea');
-            textArea.value = text;
-            document.body.appendChild(textArea);
-            textArea.select();
-            try {{
-                const successful = document.execCommand('copy');
-                if (successful) {{
-                    alert('复制成功！');
-                }} else {{
-                    alert('复制失败');
-                }}
-            }} catch (err) {{
-                alert('复制失败');
-            }}
-            document.body.removeChild(textArea);
-        }}
-        </script>
-        '''
-        st.components.v1.html(copy_html, height=50)
-    
-    with col2:
-        # 点赞按钮
-        like_emoji = "👍" if current_rating != "like" else "✅"
-        like_key = f"like_{message_index}_{hash(message_text)}"
-        if st.button(like_emoji, key=like_key, help="点赞"):
-            handle_message_rating(message_index, 'like')
-            st.rerun()
-    
-    with col3:
-        # 踩按钮
-        dislike_emoji = "👎" if current_rating != "dislike" else "❌"
-        dislike_key = f"dislike_{message_index}_{hash(message_text)}"
-        if st.button(dislike_emoji, key=dislike_key, help="踩"):
-            handle_message_rating(message_index, 'dislike')
-            st.rerun()
-    
-    with col4:
-        # 重新生成按钮（仅对AI回答显示）
-        if question is not None:
-            regen_key = f"regen_{message_index}_{hash(message_text)}"
-            if st.button("🔄", key=regen_key, help="重新回答"):
-                regenerate_answer(question)
-                st.rerun()
 
 # ---------- 从本地 Markdown 文件获取文档内容 ----------
 def fetch_document_from_file(file_path):
@@ -595,10 +673,55 @@ def setup_sidebar():
             - 复制功能支持现代浏览器的一键复制
             """)
 
+# ---------- 处理JavaScript事件 ----------
+def handle_javascript_events():
+    """处理来自JavaScript的事件"""
+    # 这里使用查询参数来模拟JavaScript事件处理
+    # 在实际应用中，可能需要使用更复杂的方式来处理JavaScript和Python之间的通信
+    
+    query_params = st.query_params
+    
+    # 处理点赞事件
+    if 'like_msg' in query_params:
+        try:
+            message_index = int(query_params['like_msg'])
+            handle_message_rating(message_index, 'like')
+            # 清除查询参数
+            del st.query_params['like_msg']
+            st.rerun()
+        except:
+            pass
+    
+    # 处理踩事件
+    if 'dislike_msg' in query_params:
+        try:
+            message_index = int(query_params['dislike_msg'])
+            handle_message_rating(message_index, 'dislike')
+            # 清除查询参数
+            del st.query_params['dislike_msg']
+            st.rerun()
+        except:
+            pass
+    
+    # 处理重新生成事件
+    if 'regen_msg' in query_params and 'regen_question' in query_params:
+        try:
+            question = query_params['regen_question']
+            regenerate_answer(question)
+            # 清除查询参数
+            del st.query_params['regen_msg']
+            del st.query_params['regen_question']
+            st.rerun()
+        except:
+            pass
+
 # ---------- Streamlit 主界面 ----------
 def main():
     # 初始化会话状态
     initialize_session_state()
+    
+    # 处理JavaScript事件
+    handle_javascript_events()
     
     # 页面标题
     st.markdown("""
@@ -625,15 +748,16 @@ def main():
         with msgs.chat_message(role):
             st.write(text)
             
-            # 为AI回答添加操作按钮
+            # 为AI回答添加HTML按钮组
             if role == "assistant":
                 # 寻找对应的用户问题
                 question = None
                 if i > 0 and st.session_state.messages[i-1][0] == "user":
                     question = st.session_state.messages[i-1][1]
                 
-                # 添加按钮组
-                create_message_actions(i, text, question)
+                # 渲染HTML按钮组
+                buttons_html = create_message_actions_html(i, text, question)
+                st.components.v1.html(buttons_html, height=60)
     
     # 处理重新生成回答
     if st.session_state.regenerating:
@@ -656,9 +780,10 @@ def main():
                 # 更新对话历史
                 st.session_state.chat_history.append(AIMessage(content=response))
                 
-                # 为新回答添加按钮组
+                # 为新回答添加HTML按钮组
                 new_message_index = len(st.session_state.messages) - 1
-                create_message_actions(new_message_index, response, st.session_state.last_question)
+                buttons_html = create_message_actions_html(new_message_index, response, st.session_state.last_question)
+                st.components.v1.html(buttons_html, height=60)
                 
                 # 重置重新生成状态
                 st.session_state.regenerating = False
@@ -705,9 +830,10 @@ def main():
                 if len(st.session_state.chat_history) > 20:
                     st.session_state.chat_history = st.session_state.chat_history[-20:]
                 
-                # 为新回答添加按钮组
+                # 为新回答添加HTML按钮组
                 message_index = len(st.session_state.messages) - 1
-                create_message_actions(message_index, response, prompt)
+                buttons_html = create_message_actions_html(message_index, response, prompt)
+                st.components.v1.html(buttons_html, height=60)
                     
             except Exception as e:
                 error_msg = f"生成回答时出错: {str(e)}"
@@ -716,3 +842,18 @@ def main():
                 # 显示详细错误信息供调试
                 with st.expander("错误详情"):
                     st.code(str(e))
+    
+    # 底部信息
+    st.markdown("---")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("对话轮数", len(st.session_state.messages) // 2)
+    with col2:
+        uploaded_count = len(st.session_state.get('uploaded_files_info', []))
+        st.metric("已上传文件", uploaded_count)
+    with col3:
+        memory_count = len(st.session_state.chat_history) // 2
+        st.metric("记忆对话数", memory_count)
+
+if __name__ == "__main__":
+    main()
