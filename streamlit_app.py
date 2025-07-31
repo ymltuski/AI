@@ -408,25 +408,6 @@ def setup_sidebar():
         
         st.markdown("---")
         
-        # 显示评分统计
-        if st.session_state.message_ratings:
-            st.markdown("### 📊 回答质量统计")
-            likes = sum(1 for rating in st.session_state.message_ratings.values() if rating == "like")
-            dislikes = sum(1 for rating in st.session_state.message_ratings.values() if rating == "dislike")
-            total_ratings = len(st.session_state.message_ratings)
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                st.metric("👍 点赞", likes)
-            with col2:
-                st.metric("👎 踩", dislikes)
-            
-            if total_ratings > 0:
-                satisfaction_rate = (likes / total_ratings) * 100
-                st.metric("满意度", f"{satisfaction_rate:.1f}%")
-        
-        st.markdown("---")
-        
         # 清除对话历史按钮
         if st.button("🗑️ 清除对话历史", use_container_width=True):
             st.session_state.messages = []
@@ -475,57 +456,50 @@ def setup_sidebar():
 # ---------- 消息交互组件 ----------
 def render_message_actions(message_index, message_text, question=None):
     """渲染消息交互按钮"""
-    col1, col2, col3, col4 = st.columns([1, 1, 1, 5])
+    # 创建一个简洁的按钮行
+    col1, col2, col3, col4, col5 = st.columns([1, 1, 1, 2, 10])
     
     with col1:
-        # 复制按钮
-        if st.button("📋", key=f"copy_{message_index}", help="复制到剪贴板"):
-            # 使用JavaScript复制功能
-            copy_js = f"""
+        # 复制按钮 - 使用简洁的图标
+        copy_button = st.button("📄", key=f"copy_{message_index}", help="复制", use_container_width=False)
+        if copy_button:
+            # 使用streamlit的内置方法复制到剪贴板
+            st.write(f"""
             <script>
-            navigator.clipboard.writeText(`{message_text.replace('`', '\\`').replace('\\', '\\\\')}`).then(function() {{
-                alert('已复制到剪贴板！');
-            }}).catch(function(err) {{
-                console.error('复制失败: ', err);
-                alert('复制失败，请手动复制');
-            }});
+            navigator.clipboard.writeText(`{message_text.replace("`", "\\`").replace("'", "\\'").replace('"', '\\"').replace(chr(10), "\\n")}`);
             </script>
-            """
-            st.components.v1.html(copy_js, height=0)
+            """, unsafe_allow_html=True)
+            st.toast("已复制到剪贴板！", icon="✅")
     
     with col2:
         # 点赞按钮
-        like_key = f"like_{message_index}"
         current_rating = st.session_state.message_ratings.get(message_index, None)
-        like_color = "🟢" if current_rating == "like" else "👍"
+        like_pressed = current_rating == "like"
         
-        if st.button(like_color, key=like_key, help="点赞"):
-            if current_rating == "like":
-                # 取消点赞
+        if st.button("👍", key=f"like_{message_index}", help="点赞", 
+                    type="primary" if like_pressed else "secondary", use_container_width=False):
+            if like_pressed:
                 del st.session_state.message_ratings[message_index]
             else:
-                # 点赞
                 st.session_state.message_ratings[message_index] = "like"
             st.rerun()
     
     with col3:
         # 踩按钮
-        dislike_key = f"dislike_{message_index}"
-        dislike_color = "🔴" if current_rating == "dislike" else "👎"
+        dislike_pressed = current_rating == "dislike"
         
-        if st.button(dislike_color, key=dislike_key, help="踩"):
-            if current_rating == "dislike":
-                # 取消踩
+        if st.button("👎", key=f"dislike_{message_index}", help="踩",
+                    type="primary" if dislike_pressed else "secondary", use_container_width=False):
+            if dislike_pressed:
                 del st.session_state.message_ratings[message_index]
             else:
-                # 踩
                 st.session_state.message_ratings[message_index] = "dislike"
             st.rerun()
     
     with col4:
         # 重新回答按钮（仅对AI回答显示）
         if question:
-            if st.button("🔄 重新回答", key=f"regenerate_{message_index}", help="重新生成回答"):
+            if st.button("Retry ↻", key=f"regenerate_{message_index}", help="重新生成回答", use_container_width=False):
                 regenerate_answer(question)
                 st.rerun()
 
@@ -652,7 +626,7 @@ def main():
     
     # 底部信息
     st.markdown("---")
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3 = st.columns(3)
     with col1:
         st.metric("对话轮数", len(st.session_state.messages) // 2)
     with col2:
@@ -661,13 +635,6 @@ def main():
     with col3:
         memory_count = len(st.session_state.chat_history) // 2
         st.metric("记忆对话数", memory_count)
-    with col4:
-        total_ratings = len(st.session_state.message_ratings)
-        st.metric("评分次数", total_ratings)
-
-    # 添加操作提示
-    if st.session_state.messages:
-        st.info("💡 提示：您可以对AI的回答进行复制📋、点赞👍、踩👎或重新生成🔄操作")
 
 if __name__ == "__main__":
     main()
