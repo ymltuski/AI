@@ -55,63 +55,82 @@ st.markdown("""
         margin-bottom: 1rem;
     }
     
-    /* 消息按钮组样式 - 左下角排列 */
+    /* 消息按钮组样式 */
     .message-actions {
         display: flex;
         gap: 8px;
-        margin-top: 15px;
-        margin-bottom: 5px;
-        justify-content: flex-start;
+        margin-top: 10px;
+        margin-bottom: 10px;
         align-items: center;
     }
     
-    /* 统一的白框按钮样式 */
+    /* 统一的按钮样式 */
     .action-button {
-        background: white;
-        border: 2px solid #dee2e6;
-        border-radius: 8px;
-        padding: 8px 16px;
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 6px;
+        padding: 6px 12px;
         cursor: pointer;
-        font-size: 18px;
+        font-size: 14px;
         color: #495057;
         transition: all 0.2s ease;
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        min-width: 50px;
-        height: 40px;
+        gap: 4px;
+        min-width: 80px;
         text-decoration: none;
         font-family: inherit;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
     
     .action-button:hover {
-        background: #f8f9fa;
+        background: #e9ecef;
         border-color: #adb5bd;
         transform: translateY(-1px);
-        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
-    }
-    
-    .action-button:active {
-        transform: translateY(0);
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
     
-    .action-button.copied {
-        background: white;
-        border-color: #28a745;
-        color: #28a745;
+    /* 复制按钮样式 */
+    .copy-button {
+        background: #007bff;
+        color: white;
+        border-color: #007bff;
     }
     
-    .action-button.loading {
-        background: white;
+    .copy-button:hover {
+        background: #0056b3;
+        border-color: #0056b3;
+        color: white;
+    }
+    
+    .copy-button.copied {
+        background: #28a745;
+        border-color: #28a745;
+        color: white;
+    }
+    
+    /* 重新生成按钮样式 */
+    .regenerate-button {
+        background: #17a2b8;
+        color: white;
+        border-color: #17a2b8;
+    }
+    
+    .regenerate-button:hover {
+        background: #138496;
+        border-color: #117a8b;
+        color: white;
+    }
+    
+    .regenerate-button.loading {
+        background: #ffc107;
         border-color: #ffc107;
-        color: #ffc107;
+        color: #212529;
     }
     
     /* 状态提示样式 */
     .status-message {
-        font-size: 14px;
+        font-size: 12px;
         color: #28a745;
         margin-left: 8px;
         display: none;
@@ -140,54 +159,69 @@ def initialize_session_state():
     if "regenerate_index" not in st.session_state:
         st.session_state.regenerate_index = None
 
-# ---------- 简化的HTML按钮组 ----------
-def create_action_buttons_html(message_index, message_text):
-    """创建操作按钮组HTML"""
+# ---------- 重新生成功能的Streamlit组件 ----------
+def create_message_actions(message_index, message_text, question=None):
+    """创建消息操作按钮组"""
+    col1, col2, col3 = st.columns([2, 2, 6])
+    
+    with col1:
+        # 复制按钮
+        if st.button("📋 复制", key=f"copy_{message_index}", help="复制消息到剪贴板"):
+            # 使用JavaScript复制功能
+            copy_js = f"""
+            <script>
+            navigator.clipboard.writeText(`{message_text.replace('`', '\\`').replace('\\', '\\\\')}`).then(function() {{
+                console.log('复制成功');
+            }}).catch(function(err) {{
+                console.error('复制失败:', err);
+            }});
+            </script>
+            """
+            st.components.v1.html(copy_js, height=0)
+            st.success("已复制到剪贴板！", icon="✅")
+    
+    with col2:
+        # 重新生成按钮（仅对AI回答显示）
+        if question is not None:
+            if st.button("🔄 重新回答", key=f"regen_{message_index}", help="重新生成回答"):
+                # 设置重新生成的请求
+                st.session_state.regenerate_question = question
+                st.session_state.regenerate_index = message_index
+                st.rerun()
+
+# ---------- 简化的HTML复制按钮 ----------
+def create_copy_button_html(message_index, message_text):
+    """创建简单的复制按钮HTML"""
     # 转义文本中的特殊字符
     escaped_text = message_text.replace('\\', '\\\\').replace('`', '\\`').replace("'", "\\'").replace('"', '\\"').replace('\n', '\\n').replace('\r', '\\r')
     
-    buttons_html = f'''
-    <div class="message-actions">
+    copy_html = f'''
+    <div style="margin: 10px 0;">
         <button onclick="copyToClipboard{message_index}()" 
-                class="action-button"
-                title="Copy to clipboard"
-                id="copy-btn-{message_index}">
-            📋
+                style="background: #007bff; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 14px;">
+            📋 复制回答
         </button>
-        <button onclick="showRegenerateHint{message_index}()" 
-                class="action-button"
-                title="Click regenerate button below"
-                id="regen-btn-{message_index}">
-            🔄
-        </button>
-        <span id="status-{message_index}" class="status-message"></span>
+        <span id="copy-status-{message_index}" style="margin-left: 10px; color: #28a745; font-size: 12px;"></span>
     </div>
     
     <script>
     function copyToClipboard{message_index}() {{
         const text = `{escaped_text}`;
-        const statusElement = document.getElementById('status-{message_index}');
-        const button = document.getElementById('copy-btn-{message_index}');
+        const statusElement = document.getElementById('copy-status-{message_index}');
         
         if (navigator.clipboard && window.isSecureContext) {{
             navigator.clipboard.writeText(text).then(function() {{
-                button.classList.add('copied');
-                statusElement.textContent = '✅ Copied';
-                statusElement.classList.add('show');
-                setTimeout(() => {{
-                    button.classList.remove('copied');
-                    statusElement.classList.remove('show');
-                    statusElement.textContent = '';
-                }}, 2000);
+                statusElement.textContent = '✅ 已复制';
+                setTimeout(() => statusElement.textContent = '', 2000);
             }}).catch(function(err) {{
-                fallbackCopy{message_index}(text, statusElement, button);
+                fallbackCopy{message_index}(text, statusElement);
             }});
         }} else {{
-            fallbackCopy{message_index}(text, statusElement, button);
+            fallbackCopy{message_index}(text, statusElement);
         }}
     }}
     
-    function fallbackCopy{message_index}(text, statusElement, button) {{
+    function fallbackCopy{message_index}(text, statusElement) {{
         const textArea = document.createElement('textarea');
         textArea.value = text;
         textArea.style.position = 'fixed';
@@ -200,44 +234,21 @@ def create_action_buttons_html(message_index, message_text):
         try {{
             const successful = document.execCommand('copy');
             if (successful) {{
-                button.classList.add('copied');
-                statusElement.textContent = '✅ Copied';
-                statusElement.classList.add('show');
+                statusElement.textContent = '✅ 已复制';
             }} else {{
-                statusElement.textContent = '❌ Failed';
-                statusElement.classList.add('show');
+                statusElement.textContent = '❌ 复制失败';
             }}
         }} catch (err) {{
-            statusElement.textContent = '❌ Failed';
-            statusElement.classList.add('show');
+            statusElement.textContent = '❌ 复制失败';
         }}
         
         document.body.removeChild(textArea);
-        setTimeout(() => {{
-            button.classList.remove('copied');
-            statusElement.classList.remove('show');
-            statusElement.textContent = '';
-        }}, 2000);
-    }}
-    
-    function showRegenerateHint{message_index}() {{
-        const statusElement = document.getElementById('status-{message_index}');
-        const button = document.getElementById('regen-btn-{message_index}');
-        
-        button.classList.add('loading');
-        statusElement.textContent = '👇 Click regenerate below';
-        statusElement.classList.add('show');
-        
-        setTimeout(() => {{
-            button.classList.remove('loading');
-            statusElement.classList.remove('show');
-            statusElement.textContent = '';
-        }}, 3000);
+        setTimeout(() => statusElement.textContent = '', 2000);
     }}
     </script>
     '''
     
-    return buttons_html
+    return copy_html
 
 # ---------- 处理重新生成请求 ----------
 def handle_regenerate_request():
@@ -248,11 +259,13 @@ def handle_regenerate_request():
         
         try:
             # 找到对应的问题在messages中的位置
+            # message_index是AI回答的索引，对应的问题应该在前一个位置
             if message_index > 0 and message_index < len(st.session_state.messages):
                 # 移除要重新生成的AI回答
                 st.session_state.messages = st.session_state.messages[:message_index]
                 
                 # 同样调整对话历史
+                # 每个用户问题对应一个 HumanMessage 和一个 AIMessage
                 pairs_to_keep = message_index // 2
                 st.session_state.chat_history = st.session_state.chat_history[:pairs_to_keep * 2]
                 
@@ -265,7 +278,7 @@ def handle_regenerate_request():
                 st.session_state.regenerate_question = None
                 st.session_state.regenerate_index = None
                 
-                return question
+                return question  # 返回问题以便重新生成回答
                 
         except Exception as e:
             st.error(f"处理重新生成请求时出错: {e}")
@@ -303,16 +316,18 @@ def process_uploaded_file(uploaded_file):
                 page_text = page.extract_text()
                 content += f"\n[第{page_num+1}页]\n{page_text}"
         elif file_extension in ['docx', 'doc']:
+            # 保存临时文件
             with tempfile.NamedTemporaryFile(delete=False, suffix=f'.{file_extension}') as tmp_file:
                 tmp_file.write(uploaded_file.read())
                 tmp_file_path = tmp_file.name
             
             content = docx2txt.process(tmp_file_path)
-            os.unlink(tmp_file_path)
+            os.unlink(tmp_file_path)  # 删除临时文件
         else:
             st.error(f"不支持的文件格式: {file_extension}")
             return ""
         
+        # 验证内容是否成功提取
         if not content or len(content.strip()) == 0:
             st.error(f"文件 {uploaded_file.name} 内容为空或无法提取")
             return ""
@@ -323,6 +338,19 @@ def process_uploaded_file(uploaded_file):
     except Exception as e:
         st.error(f"处理文件 {uploaded_file.name} 时出错: {str(e)}")
         return ""
+
+# ---------- 测试检索器功能 ----------
+def test_retriever(question="测试"):
+    """测试检索器是否正常工作"""
+    try:
+        retriever = build_retriever()
+        if retriever:
+            docs = retriever.invoke(question)
+            return docs
+        return []
+    except Exception as e:
+        st.error(f"测试检索器时出错: {e}")
+        return []
 
 # ---------- 构建检索器 ----------
 def build_retriever():
@@ -363,6 +391,7 @@ def build_retriever():
 def get_qa_chain_with_memory():
     llm = ChatOpenAI(model_name="gpt-4o", temperature=0, openai_api_key=os.getenv("OPENAI_API_KEY"))
     
+    # 改进的系统提示，允许模型在找不到相关信息时使用自身知识
     system = (
         "你是一个乐于助人的 AI 助手。\n"
         "请首先基于下面提供的上下文信息回答问题。如果上下文中包含相关信息，请优先使用这些信息。"
@@ -385,6 +414,7 @@ def get_qa_chain_with_memory():
         return formatted
     
     def get_context_and_question(inputs):
+        # 每次调用时重新构建检索器，确保使用最新的文档
         retriever = build_retriever()
         if retriever:
             try:
@@ -421,6 +451,7 @@ def setup_sidebar():
     with st.sidebar:
         st.markdown("### 📁 文件上传")
         
+        # 文件上传器
         uploaded_files = st.file_uploader(
             "上传文档文件",
             type=['txt', 'md', 'pdf', 'docx', 'doc'],
@@ -429,11 +460,13 @@ def setup_sidebar():
         )
         
         if uploaded_files:
+            # 初始化会话状态
             if 'uploaded_docs' not in st.session_state:
                 st.session_state.uploaded_docs = []
             if 'uploaded_files_info' not in st.session_state:
                 st.session_state.uploaded_files_info = []
             
+            # 处理新上传的文件
             existing_files = [info['name'] for info in st.session_state.uploaded_files_info]
             new_files_processed = 0
             
@@ -442,22 +475,28 @@ def setup_sidebar():
                     with st.spinner(f"正在处理文件: {uploaded_file.name}"):
                         content = process_uploaded_file(uploaded_file)
                         if content:
+                            # 添加文档内容
                             st.session_state.uploaded_docs.append(content)
+                            
+                            # 保存文件信息
                             st.session_state.uploaded_files_info.append({
                                 'name': uploaded_file.name,
                                 'size': uploaded_file.size,
                                 'content_length': len(content)
                             })
+                            
                             new_files_processed += 1
                             st.success(f"✅ {uploaded_file.name} 处理成功！")
                         else:
                             st.error(f"❌ {uploaded_file.name} 处理失败！")
             
             if new_files_processed > 0:
+                # 重新构建chain（每次都会重新构建检索器）
                 st.session_state.chain = get_qa_chain_with_memory()
                 st.success(f"🎉 成功处理 {new_files_processed} 个新文件！知识库已更新。")
                 st.rerun()
         
+        # 显示已上传的文件
         if 'uploaded_files_info' in st.session_state and st.session_state.uploaded_files_info:
             st.markdown("### 📋 已上传文件")
             for i, file_info in enumerate(st.session_state.uploaded_files_info):
@@ -465,20 +504,38 @@ def setup_sidebar():
                     st.write(f"**文件大小:** {file_info['size']} bytes")
                     st.write(f"**内容长度:** {file_info['content_length']} 字符")
                     
+                    # 显示文档内容预览
                     if 'uploaded_docs' in st.session_state and i < len(st.session_state.uploaded_docs):
                         preview = st.session_state.uploaded_docs[i][:200] + "..." if len(st.session_state.uploaded_docs[i]) > 200 else st.session_state.uploaded_docs[i]
                         st.text_area("内容预览:", preview, height=100, disabled=True)
         
         st.markdown("---")
         
+        # 显示知识库状态
         if 'uploaded_docs' in st.session_state:
             total_chars = sum(len(doc) for doc in st.session_state.uploaded_docs)
             st.markdown("### 📊 知识库状态")
             st.metric("文档数量", len(st.session_state.uploaded_docs))
             st.metric("总字符数", f"{total_chars:,}")
+            
+            # 测试检索功能
+            if st.button("🔍 测试知识库检索", use_container_width=True):
+                test_query = st.text_input("输入测试问题:", value="学生手册", key="test_query")
+                if test_query:
+                    with st.spinner("正在测试检索..."):
+                        docs = test_retriever(test_query)
+                        if docs:
+                            st.success(f"✅ 检索成功！找到 {len(docs)} 个相关片段")
+                            with st.expander("查看检索结果"):
+                                for i, doc in enumerate(docs):
+                                    st.write(f"**片段 {i+1}:**")
+                                    st.write(doc.page_content[:300] + "...")
+                        else:
+                            st.warning("⚠️ 未找到相关内容")
         
         st.markdown("---")
         
+        # 清除对话历史按钮
         if st.button("🗑️ 清除对话历史", use_container_width=True):
             st.session_state.messages = []
             st.session_state.chat_history = []
@@ -487,6 +544,7 @@ def setup_sidebar():
             st.success("对话历史已清除！")
             st.rerun()
         
+        # 清除上传文件按钮
         if st.button("📁 清除上传文件", use_container_width=True):
             if 'uploaded_docs' in st.session_state:
                 del st.session_state.uploaded_docs
@@ -495,43 +553,76 @@ def setup_sidebar():
             st.session_state.chain = get_qa_chain_with_memory()
             st.success("所有上传文件已清除！")
             st.rerun()
+        
+        st.markdown("---")
+        
+        # 使用说明
+        with st.expander("📖 使用说明"):
+            st.markdown("""
+            **功能特点：**
+            - 🔍 智能检索：从知识库中查找相关信息  
+            - 🧠 知识融合：找不到时使用AI自身知识回答
+            - 💭 对话记忆：记住之前的对话内容
+            - 📁 文件上传：支持多种格式文档
+            - 📋 一键复制：直接点击复制AI回答到剪贴板
+            - 🔄 重新回答：不满意可重新生成回答
+            
+            **使用方法：**
+            1. 上传相关文档文件（会自动处理并加入知识库）
+            2. 在下方输入框中提问
+            3. AI会结合文档内容和对话历史回答
+            4. 使用底部按钮进行复制或重新生成
+            
+            **注意事项：**
+            - 文件上传后会自动构建知识库
+            - 大文件处理可能需要几秒钟时间
+            - 支持同时上传多个文件
+            - 复制功能支持现代浏览器的一键复制
+            - 重新回答会基于相同问题生成新答案
+            """)
 
 # ---------- 生成AI回答的函数 ----------
 def generate_ai_response(prompt, msgs):
     """生成AI回答"""
     try:
+        # 准备输入数据，包含对话历史
         chain_input = {
             "question": prompt,
             "chat_history": st.session_state.chat_history
         }
         
+        # 显示处理状态
         with st.spinner("正在思考中..."):
+            # 流式输出回答
             response = st.write_stream(st.session_state.chain.stream(chain_input))
         
+        # 保存消息到历史记录
         st.session_state.messages.append(("assistant", response))
         
+        # 更新对话历史（用于记忆功能）
         st.session_state.chat_history.extend([
             HumanMessage(content=prompt),
             AIMessage(content=response)
         ])
         
+        # 限制对话历史长度，避免token过多
         if len(st.session_state.chat_history) > 20:
             st.session_state.chat_history = st.session_state.chat_history[-20:]
         
-        # 添加按钮组
+        # 添加复制按钮和重新生成按钮
         message_index = len(st.session_state.messages) - 1
         
-        # 使用列布局
-        col1, col2 = st.columns([3, 7])
+        # 使用列布局创建按钮
+        col1, col2, col3 = st.columns([2, 2, 6])
         
         with col1:
-            # HTML按钮组
-            buttons_html = create_action_buttons_html(message_index, response)
-            st.components.v1.html(buttons_html, height=60)
+            # 添加HTML复制按钮
+            copy_html = create_copy_button_html(message_index, response)
+            st.components.v1.html(copy_html, height=50)
         
         with col2:
-            # Streamlit重新生成按钮
-            if st.button("🔄 重新生成", key=f"regen_new_{message_index}", help="重新生成回答"):
+            # 重新生成按钮
+            if st.button("🔄 重新回答", key=f"regen_new_{message_index}", help="重新生成回答"):
                 st.session_state.regenerate_question = prompt
                 st.session_state.regenerate_index = message_index
                 st.rerun()
@@ -540,26 +631,36 @@ def generate_ai_response(prompt, msgs):
         error_msg = f"生成回答时出错: {str(e)}"
         st.error(error_msg)
         st.session_state.messages.append(("assistant", "抱歉，生成回答时出现了错误。请检查网络连接和API密钥。"))
+        # 显示详细错误信息供调试
+        with st.expander("错误详情"):
+            st.code(str(e))
 
 # ---------- Streamlit 主界面 ----------
 def main():
+    # 初始化会话状态
     initialize_session_state()
     
+    # 页面标题
     st.markdown("""
     <div class="main-header">
         <h1>🦜🔗 重庆科技大学</h1>
     </div>
     """, unsafe_allow_html=True)
     
+    # 设置侧边栏
     setup_sidebar()
     
+    # 初始化链
     if "chain" not in st.session_state:
         st.session_state.chain = get_qa_chain_with_memory()
     
+    # 主聊天区域
     st.markdown("### 💬 智能问答")
     
+    # 处理重新生成请求
     regenerate_question = handle_regenerate_request()
     
+    # 聊天消息容器
     msgs = st.container(height=500)
     
     # 显示聊天历史
@@ -567,38 +668,48 @@ def main():
         with msgs.chat_message(role):
             st.write(text)
             
+            # 为AI回答添加操作按钮
             if role == "assistant":
+                # 寻找对应的用户问题
                 question = None
                 if i > 0 and st.session_state.messages[i-1][0] == "user":
                     question = st.session_state.messages[i-1][1]
                 
-                col1, col2 = st.columns([3, 7])
+                # 创建按钮列
+                col1, col2, col3 = st.columns([2, 2, 6])
                 
                 with col1:
-                    buttons_html = create_action_buttons_html(i, text)
-                    st.components.v1.html(buttons_html, height=60)
+                    # 添加HTML复制按钮
+                    copy_html = create_copy_button_html(i, text)
+                    st.components.v1.html(copy_html, height=50)
                 
                 with col2:
+                    # 重新生成按钮
                     if question is not None:
-                        if st.button("🔄 重新生成", key=f"regen_history_{i}", help="重新生成回答"):
+                        if st.button("🔄 重新回答", key=f"regen_history_{i}", help="重新生成回答"):
                             st.session_state.regenerate_question = question
                             st.session_state.regenerate_index = i
                             st.rerun()
     
+    # 如果有重新生成请求，先处理它
     if regenerate_question:
         with msgs.chat_message("assistant"):
             st.info("🔄 正在重新生成回答...")
             generate_ai_response(regenerate_question, msgs)
         st.rerun()
     
+    # 用户输入
     if prompt := st.chat_input("请输入你的问题..."):
+        # 添加用户消息
         st.session_state.messages.append(("user", prompt))
         with msgs.chat_message("user"):
             st.write(prompt)
         
+        # 生成AI回答
         with msgs.chat_message("assistant"):
             generate_ai_response(prompt, msgs)
     
+    # 底部信息
     st.markdown("---")
     col1, col2, col3 = st.columns(3)
     with col1:
