@@ -307,12 +307,13 @@ def render_message_actions(message_index, message_content):
     col1, col2, col3, col4, col5 = st.columns([1, 1, 1, 1, 6])
     
     with col1:
-        # 复制按钮 - 改为弹出可选择的文本
+        # 复制按钮 - 点击后在下方显示可复制的文本
         if st.button("📋", key=f"copy_{message_key}", help="复制回答", 
                     use_container_width=True):
-            st.session_state[f"show_copy_{message_key}"] = True
+            # 切换显示状态
+            copy_key = f"show_copy_{message_key}"
+            st.session_state[copy_key] = not st.session_state.get(copy_key, False)
             st.rerun()
-    
     with col2:
         # 点赞按钮
         current_feedback = st.session_state.message_feedback.get(message_key, None)
@@ -350,20 +351,19 @@ def render_message_actions(message_index, message_content):
     
     st.markdown('</div>', unsafe_allow_html=True)
     
-    # 显示复制弹窗
+    # 显示简洁的复制区域
     if st.session_state.get(f"show_copy_{message_key}", False):
-        with st.expander("📋 复制内容", expanded=True):
-            # 使用code组件，用户可以轻松选择和复制
-            st.code(message_content, language=None)
-            
-            col_close, col_tip = st.columns([1, 3])
-            with col_close:
-                if st.button("关闭", key=f"close_copy_{message_key}", type="secondary"):
-                    st.session_state[f"show_copy_{message_key}"] = False
-                    st.rerun()
-                    
-            with col_tip:
-                st.caption("💡 点击代码框右上角的复制按钮，或手动选择文本复制")
+        st.text_area(
+            "点击右上角复制按钮，或选择文本复制:", 
+            value=message_content, 
+            height=120, 
+            key=f"copy_area_{message_key}",
+            label_visibility="collapsed"
+        )
+        # 添加关闭按钮
+        if st.button("❌ 关闭", key=f"close_{message_key}", type="secondary"):
+            st.session_state[f"show_copy_{message_key}"] = False
+            st.rerun()
 
 # ---------- 5. 侧边栏功能 ----------
 def setup_sidebar():
