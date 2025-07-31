@@ -23,7 +23,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# 自定义CSS样式
+# 自定义CSS样式和JavaScript复制功能
 st.markdown("""
 <style>
     .main-header {
@@ -58,48 +58,106 @@ st.markdown("""
     /* AI回答容器样式 */
     .ai-message-container {
         position: relative;
-        padding-bottom: 40px; /* 为按钮预留空间 */
+        padding-bottom: 50px; /* 为按钮预留空间 */
     }
     
-    /* 按钮容器样式 - 放在右下角 */
-    .message-actions {
-        position: absolute;
-        bottom: 8px;
-        right: 8px;
-        display: flex;
-        gap: 8px;
-        z-index: 10;
-    }
-    
-    /* 复制按钮样式 */
-    .action-icon-button {
-        background: none;
-        border: none;
+    /* 复制按钮的特殊样式 */
+    .copy-button {
+        background: #f0f2f6;
+        border: 1px solid #d0d0d0;
+        border-radius: 6px;
+        padding: 8px 12px;
         cursor: pointer;
-        font-size: 18px;
-        padding: 6px;
-        border-radius: 4px;
+        font-size: 14px;
         transition: all 0.2s;
-        opacity: 0.6;
-        display: flex;
+        display: inline-flex;
         align-items: center;
-        justify-content: center;
-        min-width: 32px;
-        min-height: 32px;
+        gap: 5px;
+        margin: 5px;
     }
     
-    .action-icon-button:hover {
-        opacity: 1;
-        background-color: rgba(0, 0, 0, 0.05);
-        transform: scale(1.1);
+    .copy-button:hover {
+        background: #e0e2e6;
+        border-color: #b0b0b0;
     }
     
-    .action-icon-button.copied {
-        opacity: 1;
-        background-color: rgba(76, 175, 80, 0.1);
-        color: #4CAF50;
+    .copy-button.copied {
+        background: #d4edda;
+        border-color: #c3e6cb;
+        color: #155724;
+    }
+    
+    /* 隐藏复制用的文本区域 */
+    .copy-text {
+        position: absolute;
+        left: -9999px;
+        opacity: 0;
     }
 </style>
+
+<script>
+function copyToClipboard(text, buttonId) {
+    // 尝试使用现代的 Clipboard API
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(text).then(function() {
+            showCopySuccess(buttonId);
+        }).catch(function(err) {
+            // 如果 Clipboard API 失败，使用传统方法
+            fallbackCopyToClipboard(text, buttonId);
+        });
+    } else {
+        // 使用传统的复制方法
+        fallbackCopyToClipboard(text, buttonId);
+    }
+}
+
+function fallbackCopyToClipboard(text, buttonId) {
+    // 创建临时的 textarea 元素
+    var textArea = document.createElement("textarea");
+    textArea.value = text;
+    textArea.style.position = "fixed";
+    textArea.style.left = "-999999px";
+    textArea.style.top = "-999999px";
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    
+    try {
+        var successful = document.execCommand('copy');
+        if (successful) {
+            showCopySuccess(buttonId);
+        } else {
+            showCopyError(buttonId);
+        }
+    } catch (err) {
+        showCopyError(buttonId);
+    }
+    
+    document.body.removeChild(textArea);
+}
+
+function showCopySuccess(buttonId) {
+    var button = document.getElementById(buttonId);
+    if (button) {
+        button.innerHTML = '✅ 已复制';
+        button.className = 'copy-button copied';
+        setTimeout(function() {
+            button.innerHTML = '📋 复制';
+            button.className = 'copy-button';
+        }, 2000);
+    }
+}
+
+function showCopyError(buttonId) {
+    var button = document.getElementById(buttonId);
+    if (button) {
+        button.innerHTML = '❌ 复制失败';
+        setTimeout(function() {
+            button.innerHTML = '📋 复制';
+        }, 2000);
+    }
+}
+</script>
 """, unsafe_allow_html=True)
 
 # ---------- 初始化会话状态 ----------
@@ -435,33 +493,37 @@ def setup_sidebar():
             - 复制功能支持现代浏览器的一键复制
             """)
 
-# ---------- 简化的消息交互组件 ----------
-def render_message_actions_v2(message_index, message_text, question=None):
-    """渲染消息交互按钮 - 统一使用Streamlit按钮，排成一行"""
+# ---------- 创建HTML复制按钮 ----------
+def create_copy_button(text, message_index):
+    """创建HTML复制按钮"""
+    # 对文本进行转义，防止JavaScript注入
+    escaped_text = text.replace('\\', '\\\\').replace("'", "\\'").replace('"', '\\"').replace('\n', '\\n').replace('\r', '\\r')
+    button_id = f"copy_btn_{message_index}"
     
-    # 使用正常的Streamlit按钮进行所有操作
-    if question:
-        # 如果有问题，显示4个按钮：复制、点赞、踩、重新生成
-        col1, col2, col3, col4 = st.columns(4)
-    else:
-        # 如果没有问题（用户消息），只显示3个按钮：复制、点赞、踩
-        col1, col2, col3 = st.columns(3)
-        col4 = None
+    html = f"""
+    <button id="{button_id}" class="copy-button" onclick="copyToClipboard('{escaped_text}', '{button_id}')">
+        📋 复制
+    </button>
+    """
+    return html
+
+# ---------- 消息交互组件 ----------
+def render_message_actions_v3(message_index, message_text, question=None):
+    """渲染消息交互按钮 - 混合使用HTML和Streamlit按钮"""
     
-    # 使用正常的Streamlit按钮进行评分和重新生成
+    # 创建列布局
     if question:
-        # 如果有问题，显示4个按钮：复制、点赞、踩、重新生成
-        col1, col2, col3, col4 = st.columns(4)
+        # AI消息：复制（HTML）+ 点赞、踩、重新生成（Streamlit）
+        col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
     else:
-        # 如果没有问题（用户消息），只显示3个按钮：复制、点赞、踩
-        col1, col2, col3 = st.columns(3)
+        # 用户消息：复制（HTML）+ 点赞、踩（Streamlit）
+        col1, col2, col3 = st.columns([1, 1, 1])
         col4 = None
     
     with col1:
-        # 复制按钮（Streamlit版本，用于保持一致性）
-        if st.button("📋", key=f"copy_{message_index}", help="复制", use_container_width=True):
-            # 这里可以添加复制逻辑或者只是视觉反馈
-            st.success("已复制到剪贴板！")
+        # HTML复制按钮
+        copy_button_html = create_copy_button(message_text, message_index)
+        st.markdown(copy_button_html, unsafe_allow_html=True)
     
     with col2:
         # 点赞按钮
@@ -540,10 +602,12 @@ def main():
                     question = st.session_state.messages[i-1][1]
                 
                 # 渲染交互按钮
-                render_message_actions_v2(i, text, question)
+                render_message_actions_v3(i, text, question)
             else:
                 # 用户消息正常显示
                 st.write(text)
+                # 用户消息也可以复制
+                render_message_actions_v3(i, text)
     
     # 处理重新生成回答
     if st.session_state.regenerating:
@@ -572,7 +636,7 @@ def main():
                 
                 # 为新回答添加交互按钮
                 new_message_index = len(st.session_state.messages) - 1
-                render_message_actions_v2(new_message_index, response, st.session_state.last_question)
+                render_message_actions_v3(new_message_index, response, st.session_state.last_question)
                 
                 # 重置重新生成状态
                 st.session_state.regenerating = False
@@ -591,6 +655,7 @@ def main():
         st.session_state.messages.append(("user", prompt))
         with msgs.chat_message("user"):
             st.write(prompt)
+            render_message_actions_v3(len(st.session_state.messages) - 1, prompt)
         
         # 生成AI回答
         with msgs.chat_message("assistant"):
@@ -624,7 +689,7 @@ def main():
                 
                 # 为新回答添加交互按钮
                 message_index = len(st.session_state.messages) - 1
-                render_message_actions_v2(message_index, response, prompt)
+                render_message_actions_v3(message_index, response, prompt)
                     
             except Exception as e:
                 error_msg = f"生成回答时出错: {str(e)}"
