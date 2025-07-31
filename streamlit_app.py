@@ -12,10 +12,12 @@ from langchain_core.messages import HumanMessage, AIMessage
 import docx2txt
 import PyPDF2
 import io
+import time
+import uuid
 
 # 页面配置
 st.set_page_config(
-    page_title="动手学大模型应用开发", 
+    page_title="重庆科技大学", 
     page_icon="🦜🔗",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -51,6 +53,28 @@ st.markdown("""
         padding: 1rem;
         border-radius: 10px;
         margin-bottom: 1rem;
+    }
+    .message-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 5px;
+        margin-top: 10px;
+        padding-top: 10px;
+        border-top: 1px solid #f0f0f0;
+    }
+    .action-button {
+        font-size: 12px !important;
+        padding: 0.25rem 0.5rem !important;
+        margin: 0 2px !important;
+        border-radius: 4px !important;
+    }
+    .liked {
+        background-color: #e8f5e8 !important;
+        color: #2d5a2d !important;
+    }
+    .disliked {
+        background-color: #fee !important;
+        color: #d63384 !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -214,6 +238,127 @@ def get_qa_chain_with_memory():
     
     return chain
 
+# ---------- 初始化消息反馈系统 ----------
+def init_message_feedback():
+    """初始化消息反馈状态"""
+    if 'message_feedback' not in st.session_state:
+        st.session_state.message_feedback = {}
+
+# ---------- 重新生成回答函数 ----------
+def regenerate_answer(message_index, original_question):
+    """重新生成指定消息的回答"""
+    try:
+        # 获取到该消息之前的对话历史
+        previous_history = []
+        for i in range(0, message_index, 2):  # 每两个消息为一轮对话
+            if i + 1 < len(st.session_state.messages):
+                user_msg = st.session_state.messages[i][1]
+                ai_msg = st.session_state.messages[i + 1][1]
+                previous_history.extend([
+                    HumanMessage(content=user_msg),
+                    AIMessage(content=ai_msg)
+                ])
+        
+        # 准备输入数据
+        chain_input = {
+            "question": original_question,
+            "chat_history": previous_history
+        }
+        
+        # 生成新回答
+        new_response = ""
+        for chunk in st.session_state.chain.stream(chain_input):
+            new_response += chunk
+        
+        # 更新消息
+        st.session_state.messages[message_index + 1] = ("assistant", new_response)
+        
+        # 更新完整的对话历史
+        st.session_state.chat_history = []
+        for i in range(0, len(st.session_state.messages), 2):
+            if i + 1 < len(st.session_state.messages):
+                user_msg = st.session_state.messages[i][1]
+                ai_msg = st.session_state.messages[i + 1][1]
+                st.session_state.chat_history.extend([
+                    HumanMessage(content=user_msg),
+                    AIMessage(content=ai_msg)
+                ])
+        
+        # 清除该消息的反馈状态
+        message_key = f"msg_{message_index + 1}"
+        if message_key in st.session_state.message_feedback:
+            del st.session_state.message_feedback[message_key]
+        
+        st.success("回答已重新生成！")
+        st.rerun()
+        
+    except Exception as e:
+        st.error(f"重新生成回答时出错: {str(e)}")
+
+# ---------- 消息操作按钮组件 ----------
+def render_message_actions(message_index, message_content):
+    """渲染消息操作按钮"""
+    message_key = f"msg_{message_index}"
+    
+    # 创建按钮容器
+    st.markdown('<div class="message-actions">', unsafe_allow_html=True)
+    
+    # 使用列来布局按钮
+    col1, col2, col3, col4, col5 = st.columns([1, 1, 1, 1, 6])
+    
+    with col1:
+        # 复制按钮
+        if st.button("📋", key=f"copy_{message_key}", help="复制回答", 
+                    use_container_width=True):
+            # 在Streamlit中，我们可以使用JavaScript来复制文本
+            # 但更简单的方式是显示一个包含文本的文本区域供用户复制
+            st.session_state[f"show_copy_{message_key}"] = True
+            st.rerun()
+    
+    with col2:
+        # 点赞按钮
+        current_feedback = st.session_state.message_feedback.get(message_key, None)
+        like_style = "liked" if current_feedback == "like" else ""
+        
+        if st.button("👍", key=f"like_{message_key}", help="点赞", 
+                    use_container_width=True):
+            if current_feedback == "like":
+                del st.session_state.message_feedback[message_key]  # 取消点赞
+            else:
+                st.session_state.message_feedback[message_key] = "like"
+            st.rerun()
+    
+    with col3:
+        # 踩按钮
+        dislike_style = "disliked" if current_feedback == "dislike" else ""
+        
+        if st.button("👎", key=f"dislike_{message_key}", help="踩", 
+                    use_container_width=True):
+            if current_feedback == "dislike":
+                del st.session_state.message_feedback[message_key]  # 取消踩
+            else:
+                st.session_state.message_feedback[message_key] = "dislike"
+            st.rerun()
+    
+    with col4:
+        # 重新回答按钮
+        if st.button("🔄", key=f"regen_{message_key}", help="重新回答", 
+                    use_container_width=True):
+            # 找到对应的用户问题
+            if message_index > 0:
+                user_question = st.session_state.messages[message_index - 1][1]
+                with st.spinner("正在重新生成回答..."):
+                    regenerate_answer(message_index - 1, user_question)
+    
+    st.markdown('</div>', unsafe_allow_html=True)
+    
+    # 显示复制文本框（如果被点击）
+    if st.session_state.get(f"show_copy_{message_key}", False):
+        st.text_area("复制下面的文本:", message_content, height=100, key=f"copy_text_{message_key}")
+        if st.button("关闭", key=f"close_copy_{message_key}"):
+            st.session_state[f"show_copy_{message_key}"] = False
+            st.rerun()
+
 # ---------- 5. 侧边栏功能 ----------
 def setup_sidebar():
     with st.sidebar:
@@ -303,10 +448,24 @@ def setup_sidebar():
         
         st.markdown("---")
         
+        # 显示反馈统计
+        if 'message_feedback' in st.session_state and st.session_state.message_feedback:
+            st.markdown("### 📊 反馈统计")
+            likes = sum(1 for feedback in st.session_state.message_feedback.values() if feedback == "like")
+            dislikes = sum(1 for feedback in st.session_state.message_feedback.values() if feedback == "dislike")
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric("👍 点赞", likes)
+            with col2:
+                st.metric("👎 踩", dislikes)
+        
+        st.markdown("---")
+        
         # 清除对话历史按钮
         if st.button("🗑️ 清除对话历史", use_container_width=True):
             st.session_state.messages = []
             st.session_state.chat_history = []
+            st.session_state.message_feedback = {}
             st.success("对话历史已清除！")
             st.rerun()
         
@@ -330,16 +489,21 @@ def setup_sidebar():
             - 🧠 知识融合：找不到时使用AI自身知识回答
             - 💭 对话记忆：记住之前的对话内容
             - 📁 文件上传：支持多种格式文档
+            - 📋 复制功能：快速复制AI回答内容
+            - 👍👎 反馈系统：对回答进行评价
+            - 🔄 重新回答：重新生成不满意的回答
             
             **使用方法：**
             1. 上传相关文档文件（会自动处理并加入知识库）
             2. 在下方输入框中提问
             3. AI会结合文档内容和对话历史回答
+            4. 使用右下角按钮对回答进行操作
             
             **注意事项：**
             - 文件上传后会自动构建知识库
             - 大文件处理可能需要几秒钟时间
             - 支持同时上传多个文件
+            - 重新回答会保持对话上下文
             """)
         
         # 调试信息（可选）
@@ -351,13 +515,19 @@ def setup_sidebar():
                     st.write(f"文档 {i+1} 长度: {len(doc)} 字符")
             else:
                 st.write("暂无上传文档")
+            
+            if 'message_feedback' in st.session_state:
+                st.write("反馈状态:", st.session_state.message_feedback)
 
 # ---------- 6. Streamlit 主界面 ----------
 def main():
+    # 初始化消息反馈系统
+    init_message_feedback()
+    
     # 页面标题
     st.markdown("""
     <div class="main-header">
-        <h1>🦜🔗 动手学大模型应用开发 - 增强版</h1>
+        <h1>🦜🔗 重庆科技大学</h1>
     </div>
     """, unsafe_allow_html=True)
     
@@ -381,9 +551,13 @@ def main():
     msgs = st.container(height=500)
     
     # 显示聊天历史
-    for role, text in st.session_state.messages:
+    for i, (role, text) in enumerate(st.session_state.messages):
         with msgs.chat_message(role):
             st.write(text)
+            
+            # 只为AI回答添加操作按钮
+            if role == "assistant":
+                render_message_actions(i, text)
     
     # 用户输入
     if prompt := st.chat_input("请输入你的问题..."):
@@ -418,6 +592,9 @@ def main():
                 # 限制对话历史长度，避免token过多
                 if len(st.session_state.chat_history) > 20:
                     st.session_state.chat_history = st.session_state.chat_history[-20:]
+                
+                # 为新消息添加操作按钮
+                render_message_actions(len(st.session_state.messages) - 1, response)
                     
             except Exception as e:
                 error_msg = f"生成回答时出错: {str(e)}"
@@ -429,7 +606,7 @@ def main():
     
     # 底部信息
     st.markdown("---")
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
         st.metric("对话轮数", len(st.session_state.messages) // 2)
     with col2:
@@ -438,6 +615,9 @@ def main():
     with col3:
         memory_count = len(st.session_state.chat_history) // 2
         st.metric("记忆对话数", memory_count)
+    with col4:
+        feedback_count = len(st.session_state.get('message_feedback', {}))
+        st.metric("反馈次数", feedback_count)
 
 if __name__ == "__main__":
     main()
