@@ -12,6 +12,7 @@ from langchain_core.messages import HumanMessage, AIMessage
 import docx2txt
 import PyPDF2
 import io
+import uuid  # 用于生成唯一键
 
 # 页面配置
 st.set_page_config(
@@ -51,6 +52,22 @@ st.markdown("""
         padding: 1rem;
         border-radius: 10px;
         margin-bottom: 1rem;
+    }
+    .interaction-buttons {
+        display: flex;
+        justify-content: flex-start;
+        gap: 10px;
+        margin-top: 10px;
+    }
+    .copy-button {
+        background-color: #f0f2f6;
+        border: 1px solid #ddd;
+        padding: 5px 10px;
+        cursor: pointer;
+        border-radius: 5px;
+    }
+    .copy-button:hover {
+        background-color: #e0e0e0;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -307,6 +324,8 @@ def setup_sidebar():
         if st.button("🗑️ 清除对话历史", use_container_width=True):
             st.session_state.messages = []
             st.session_state.chat_history = []
+            if 'feedback' in st.session_state:
+                del st.session_state.feedback
             st.success("对话历史已清除！")
             st.rerun()
         
@@ -352,6 +371,19 @@ def setup_sidebar():
             else:
                 st.write("暂无上传文档")
 
+# ---------- 函数：生成回答 ----------
+def generate_response(prompt):
+    try:
+        chain_input = {
+            "question": prompt,
+            "chat_history": st.session_state.chat_history
+        }
+        response = st.session_state.chain.invoke(chain_input)
+        return response
+    except Exception as e:
+        st.error(f"生成回答时出错: {str(e)}")
+        return None
+
 # ---------- 6. Streamlit 主界面 ----------
 def main():
     # 页面标题
@@ -374,6 +406,9 @@ def main():
     if "chain" not in st.session_state:
         st.session_state.chain = get_qa_chain_with_memory()
     
+    if "feedback" not in st.session_state:
+        st.session_state.feedback = {}  # 存储每个消息的反馈，key为消息索引
+    
     # 主聊天区域
     st.markdown("### 💬 智能问答")
     
@@ -381,9 +416,57 @@ def main():
     msgs = st.container(height=500)
     
     # 显示聊天历史
-    for role, text in st.session_state.messages:
+    for idx, (role, text) in enumerate(st.session_state.messages):
         with msgs.chat_message(role):
-            st.write(text)
+            st.markdown(text)
+            
+            if role == "assistant":
+                # 生成唯一键
+                msg_key = f"msg_{idx}"
+                
+                # 交互按钮容器
+                st.markdown('<div class="interaction-buttons">', unsafe_allow_html=True)
+                
+                # 复制按钮（使用JS直接复制）
+                escaped_text = text.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "\\n").replace("\r", "")
+                copy_html = f"""
+                <button class="copy-button" onclick="navigator.clipboard.writeText('{escaped_text}')">📋 复制</button>
+                """
+                st.markdown(copy_html, unsafe_allow_html=True)
+                
+                # 点赞/不点赞按钮
+                col_like, col_dislike = st.columns(2)
+                with col_like:
+                    if st.button("👍 点赞", key=f"like_{msg_key}"):
+                        st.session_state.feedback[msg_key] = "like"
+                        st.success("感谢您的反馈！")
+                with col_dislike:
+                    if st.button("👎 不点赞", key=f"dislike_{msg_key}"):
+                        st.session_state.feedback[msg_key] = "dislike"
+                        st.success("感谢您的反馈！我们会改进。")
+                
+                # 显示当前反馈
+                if msg_key in st.session_state.feedback:
+                    st.write(f"您的反馈: {st.session_state.feedback[msg_key]}")
+                
+                # 重新回答按钮
+                if st.button("🔄 重新回答", key=f"regenerate_{msg_key}"):
+                    # 找到对应的用户问题（假设消息是user-assistant交替）
+                    if idx > 0 and st.session_state.messages[idx-1][0] == "user":
+                        original_prompt = st.session_state.messages[idx-1][1]
+                        with st.spinner("正在重新生成回答..."):
+                            new_response = generate_response(original_prompt)
+                            if new_response:
+                                # 替换旧回答
+                                st.session_state.messages[idx] = ("assistant", new_response)
+                                # 更新chat_history的最后一个AI消息
+                                if st.session_state.chat_history:
+                                    st.session_state.chat_history[-1] = AIMessage(content=new_response)
+                                st.rerun()
+                    else:
+                        st.warning("无法找到对应的问题。")
+                
+                st.markdown('</div>', unsafe_allow_html=True)
     
     # 用户输入
     if prompt := st.chat_input("请输入你的问题..."):
@@ -403,8 +486,9 @@ def main():
                 
                 # 显示处理状态
                 with st.spinner("正在思考中..."):
-                    # 流式输出回答
-                    response = st.write_stream(st.session_state.chain.stream(chain_input))
+                    # 直接输出回答（非流式，以简化）
+                    response = st.session_state.chain.invoke(chain_input)
+                    st.markdown(response)
                 
                 # 保存消息到历史记录
                 st.session_state.messages.append(("assistant", response))
@@ -418,6 +502,42 @@ def main():
                 # 限制对话历史长度，避免token过多
                 if len(st.session_state.chat_history) > 20:
                     st.session_state.chat_history = st.session_state.chat_history[-20:]
+                
+                # 立即显示交互按钮（因为是新消息）
+                new_idx = len(st.session_state.messages) - 1
+                msg_key = f"msg_{new_idx}"
+                
+                st.markdown('<div class="interaction-buttons">', unsafe_allow_html=True)
+                
+                escaped_response = response.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "\\n").replace("\r", "")
+                copy_html = f"""
+                <button class="copy-button" onclick="navigator.clipboard.writeText('{escaped_response}')">📋 复制</button>
+                """
+                st.markdown(copy_html, unsafe_allow_html=True)
+                
+                col_like, col_dislike = st.columns(2)
+                with col_like:
+                    if st.button("👍 点赞", key=f"like_{msg_key}"):
+                        st.session_state.feedback[msg_key] = "like"
+                        st.success("感谢您的反馈！")
+                with col_dislike:
+                    if st.button("👎 不点赞", key=f"dislike_{msg_key}"):
+                        st.session_state.feedback[msg_key] = "dislike"
+                        st.success("感谢您的反馈！我们会改进。")
+                
+                if msg_key in st.session_state.feedback:
+                    st.write(f"您的反馈: {st.session_state.feedback[msg_key]}")
+                
+                if st.button("🔄 重新回答", key=f"regenerate_{msg_key}"):
+                    with st.spinner("正在重新生成回答..."):
+                        new_response = generate_response(prompt)
+                        if new_response:
+                            st.session_state.messages[-1] = ("assistant", new_response)
+                            if st.session_state.chat_history:
+                                st.session_state.chat_history[-1] = AIMessage(content=new_response)
+                            st.rerun()
+                
+                st.markdown('</div>', unsafe_allow_html=True)
                     
             except Exception as e:
                 error_msg = f"生成回答时出错: {str(e)}"
