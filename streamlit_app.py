@@ -1,6 +1,5 @@
 import streamlit as st
 import os
-import requests
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain_core.output_parsers import StrOutputParser
@@ -11,19 +10,21 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 
 st.set_page_config(page_title="动手学大模型应用开发", page_icon="🦜🔗")
 
-# ---------- 1. 从链接获取文档内容 ----------
-def fetch_document_from_url(url):
+# ---------- 1. 从本地 Markdown 文件获取文档内容 ----------
+def fetch_document_from_file(file_path):
     try:
-        response = requests.get(url)
-        response.raise_for_status()  # 检查请求是否成功
-        return response.text
-    except requests.RequestException as e:
-        st.error(f"无法获取文档内容: {e}")
+        with open(file_path, "r", encoding="utf-8") as file:
+            return file.read()
+    except FileNotFoundError:
+        st.error(f"文件未找到: {file_path}")
         st.stop()
-        return ""
+    except Exception as e:
+        st.error(f"无法读取文件: {e}")
+        st.stop()
+    return ""
 
-# 文档的链接（替换为实际的文档 URL）
-DOCUMENT_URL = "https://book.yunzhan365.com/umhx/jlqb/mobile/index.html?qq_aio_chat_type=3"  # 示例 URL
+# Markdown 文件路径（替换为实际的 Markdown 文件路径）
+DOCUMENT_FILE_PATH = "测试.md"  # 使用测试.md文件
 
 def build_retriever():
     api_key = os.getenv("OPENAI_API_KEY")
@@ -31,8 +32,8 @@ def build_retriever():
         st.error("请先设置环境变量 OPENAI_API_KEY")
         st.stop()
 
-    # 从链接获取文档内容
-    raw_docs = fetch_document_from_url(DOCUMENT_URL)
+    # 从本地文件获取文档内容
+    raw_docs = fetch_document_from_file(DOCUMENT_FILE_PATH)
     if not raw_docs:
         st.error("文档内容为空")
         st.stop()
