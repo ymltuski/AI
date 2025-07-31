@@ -1,5 +1,29 @@
-# 1. 在您的自定义CSS样式中替换以下部分：
+import streamlit as st
+import os
+import tempfile
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+from langchain_community.vectorstores import FAISS
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.runnables import RunnablePassthrough
+from langchain.schema import Document
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_core.messages import HumanMessage, AIMessage
+import docx2txt
+import PyPDF2
+import io
+import time
+import json
 
+# 页面配置
+st.set_page_config(
+    page_title="动手学大模型应用开发", 
+    page_icon="🦜🔗",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# 自定义CSS样式
 st.markdown("""
 <style>
     .main-header {
@@ -31,147 +55,150 @@ st.markdown("""
         margin-bottom: 1rem;
     }
     
-    /* 消息按钮组样式 - 优化为左下角白框按钮 */
+    /* 消息按钮组样式 - 左下角排列 */
     .message-actions {
-        position: fixed;
-        bottom: 20px;
-        left: 20px;
         display: flex;
-        gap: 10px;
-        z-index: 1000;
+        gap: 8px;
+        margin-top: 15px;
+        margin-bottom: 5px;
+        justify-content: flex-start;
+        align-items: center;
     }
     
     /* 统一的白框按钮样式 */
     .action-button {
-        width: 50px;
-        height: 50px;
-        background: transparent;
-        border: 2px solid rgba(255, 255, 255, 0.8);
+        background: white;
+        border: 2px solid #dee2e6;
         border-radius: 8px;
+        padding: 8px 16px;
         cursor: pointer;
-        display: flex;
+        font-size: 16px;
+        color: #495057;
+        transition: all 0.2s ease;
+        display: inline-flex;
         align-items: center;
         justify-content: center;
-        transition: all 0.3s ease;
-        backdrop-filter: blur(10px);
-        -webkit-backdrop-filter: blur(10px);
-        position: relative;
-        overflow: hidden;
+        min-width: 50px;
+        height: 40px;
+        text-decoration: none;
+        font-family: inherit;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
     
     .action-button:hover {
-        border-color: white;
-        background: rgba(255, 255, 255, 0.1);
-        transform: translateY(-2px);
-        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+        background: #f8f9fa;
+        border-color: #adb5bd;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
     }
     
     .action-button:active {
-        transform: translateY(-1px);
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        transform: translateY(0);
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
     
-    /* 复制按钮图标样式 */
-    .copy-button::before {
-        content: "📋";
-        font-size: 20px;
-        filter: grayscale(100%) brightness(0) invert(1);
+    /* 复制按钮样式 */
+    .copy-button {
+        background: white;
+        color: #495057;
+        border-color: #dee2e6;
     }
     
-    /* 重新生成按钮图标样式 */
-    .regenerate-button::before {
-        content: "🔄";
-        font-size: 20px;
-        filter: grayscale(100%) brightness(0) invert(1);
-        transition: transform 0.3s ease;
+    .copy-button:hover {
+        background: #f8f9fa;
+        border-color: #adb5bd;
+        color: #495057;
     }
     
-    .regenerate-button:hover::before {
-        transform: rotate(180deg);
+    .copy-button.copied {
+        background: white;
+        border-color: #28a745;
+        color: #28a745;
     }
     
-    /* 按钮点击波纹效果 */
-    .action-button::after {
-        content: '';
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        width: 0;
-        height: 0;
-        border-radius: 50%;
-        background: rgba(255, 255, 255, 0.3);
-        transform: translate(-50%, -50%);
-        transition: width 0.6s, height 0.6s;
+    /* 重新生成按钮样式 */
+    .regenerate-button {
+        background: white;
+        color: #495057;
+        border-color: #dee2e6;
     }
     
-    .action-button:active::after {
-        width: 120px;
-        height: 120px;
+    .regenerate-button:hover {
+        background: #f8f9fa;
+        border-color: #adb5bd;
+        color: #495057;
     }
     
-    /* 成功状态样式 */
-    .action-button.success {
-        border-color: #4ade80 !important;
-        animation: successPulse 0.3s ease;
-    }
-    
-    @keyframes successPulse {
-        0% { transform: scale(1); }
-        50% { transform: scale(1.1); }
-        100% { transform: scale(1); }
-    }
-    
-    /* 响应式设计 */
-    @media (max-width: 768px) {
-        .message-actions {
-            bottom: 15px;
-            left: 15px;
-            gap: 8px;
-        }
-        
-        .action-button {
-            width: 45px;
-            height: 45px;
-        }
-        
-        .copy-button::before,
-        .regenerate-button::before {
-            font-size: 18px;
-        }
-    }
-    
-    /* 隐藏原有的按钮文字 */
-    .stButton > button {
-        color: transparent !important;
-        font-size: 0 !important;
+    .regenerate-button.loading {
+        background: white;
+        border-color: #ffc107;
+        color: #ffc107;
     }
     
     /* 状态提示样式 */
     .status-message {
-        position: fixed;
-        bottom: 80px;
-        left: 20px;
-        background: rgba(0, 0, 0, 0.8);
-        color: white;
-        padding: 8px 16px;
-        border-radius: 20px;
-        font-size: 14px;
-        opacity: 0;
-        transform: translateY(10px);
-        transition: all 0.3s ease;
-        z-index: 1001;
+        font-size: 12px;
+        color: #28a745;
+        margin-left: 8px;
+        display: none;
+        align-items: center;
     }
     
     .status-message.show {
-        opacity: 1;
-        transform: translateY(0);
+        display: inline-flex;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# 2. 替换 create_copy_button_html 函数：
+# ---------- 初始化会话状态 ----------
+def initialize_session_state():
+    """初始化会话状态变量"""
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+    
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = []
+    
+    # 用于存储重新生成的请求
+    if "regenerate_question" not in st.session_state:
+        st.session_state.regenerate_question = None
+    
+    if "regenerate_index" not in st.session_state:
+        st.session_state.regenerate_index = None
+
+# ---------- 重新生成功能的Streamlit组件 ----------
+def create_message_actions(message_index, message_text, question=None):
+    """创建消息操作按钮组"""
+    col1, col2, col3 = st.columns([1, 1, 8])
+    
+    with col1:
+        # 复制按钮
+        if st.button("📋", key=f"copy_{message_index}", help="Copy to clipboard"):
+            # 使用JavaScript复制功能
+            copy_js = f"""
+            <script>
+            navigator.clipboard.writeText(`{message_text.replace('`', '\\`').replace('\\', '\\\\')}`).then(function() {{
+                console.log('Copy successful');
+            }}).catch(function(err) {{
+                console.error('Copy failed:', err);
+            }});
+            </script>
+            """
+            st.components.v1.html(copy_js, height=0)
+            st.success("Copied!", icon="✅")
+    
+    with col2:
+        # 重新生成按钮（仅对AI回答显示）
+        if question is not None:
+            if st.button("🔄", key=f"regen_{message_index}", help="Regenerate answer"):
+                # 设置重新生成的请求
+                st.session_state.regenerate_question = question
+                st.session_state.regenerate_index = message_index
+                st.rerun()
+
+# ---------- 简化的HTML复制按钮 ----------
 def create_copy_button_html(message_index, message_text):
-    """创建优化的白框复制按钮HTML"""
+    """创建简单的复制按钮HTML"""
     # 转义文本中的特殊字符
     escaped_text = message_text.replace('\\', '\\\\').replace('`', '\\`').replace("'", "\\'").replace('"', '\\"').replace('\n', '\\n').replace('\r', '\\r')
     
@@ -179,34 +206,37 @@ def create_copy_button_html(message_index, message_text):
     <div class="message-actions">
         <button onclick="copyToClipboard{message_index}()" 
                 class="action-button copy-button"
-                title="复制">
+                title="Copy to clipboard">
+            📋
         </button>
-        <button onclick="regenerateAnswer{message_index}()" 
-                class="action-button regenerate-button"
-                title="重新生成">
-        </button>
+        <span id="copy-status-{message_index}" class="status-message"></span>
     </div>
-    
-    <div id="status-message-{message_index}" class="status-message"></div>
     
     <script>
     function copyToClipboard{message_index}() {{
         const text = `{escaped_text}`;
-        const button = document.querySelector('.copy-button');
-        const statusElement = document.getElementById('status-message-{message_index}');
+        const statusElement = document.getElementById('copy-status-{message_index}');
+        const button = event.target;
         
         if (navigator.clipboard && window.isSecureContext) {{
             navigator.clipboard.writeText(text).then(function() {{
-                showStatus{message_index}('✅ 已复制', button);
+                button.classList.add('copied');
+                statusElement.textContent = '✅';
+                statusElement.classList.add('show');
+                setTimeout(() => {{
+                    button.classList.remove('copied');
+                    statusElement.classList.remove('show');
+                    statusElement.textContent = '';
+                }}, 2000);
             }}).catch(function(err) {{
-                fallbackCopy{message_index}(text, button, statusElement);
+                fallbackCopy{message_index}(text, statusElement, button);
             }});
         }} else {{
-            fallbackCopy{message_index}(text, button, statusElement);
+            fallbackCopy{message_index}(text, statusElement, button);
         }}
     }}
     
-    function fallbackCopy{message_index}(text, button, statusElement) {{
+    function fallbackCopy{message_index}(text, statusElement, button) {{
         const textArea = document.createElement('textarea');
         textArea.value = text;
         textArea.style.position = 'fixed';
@@ -219,97 +249,707 @@ def create_copy_button_html(message_index, message_text):
         try {{
             const successful = document.execCommand('copy');
             if (successful) {{
-                showStatus{message_index}('✅ 已复制', button);
+                button.classList.add('copied');
+                statusElement.textContent = '✅';
+                statusElement.classList.add('show');
             }} else {{
-                showStatus{message_index}('❌ 复制失败', button);
+                statusElement.textContent = '❌';
+                statusElement.classList.add('show');
             }}
         }} catch (err) {{
-            showStatus{message_index}('❌ 复制失败', button);
+            statusElement.textContent = '❌';
+            statusElement.classList.add('show');
         }}
         
         document.body.removeChild(textArea);
-    }}
-    
-    function showStatus{message_index}(message, button) {{
-        const statusElement = document.getElementById('status-message-{message_index}');
-        statusElement.textContent = message;
-        statusElement.classList.add('show');
-        
-        // 添加成功动画
-        if (message.includes('已复制')) {{
-            button.classList.add('success');
-            setTimeout(() => button.classList.remove('success'), 300);
-        }}
-        
-        // 3秒后隐藏状态消息
         setTimeout(() => {{
+            button.classList.remove('copied');
             statusElement.classList.remove('show');
-        }}, 3000);
-    }}
-    
-    function regenerateAnswer{message_index}() {{
-        // 这里需要触发Streamlit的重新生成功能
-        // 由于JavaScript无法直接调用Streamlit函数，这里只显示提示
-        const button = document.querySelector('.regenerate-button');
-        const statusElement = document.getElementById('status-message-{message_index}');
-        showStatus{message_index}('请点击Streamlit重新生成按钮', button);
+            statusElement.textContent = '';
+        }}, 2000);
     }}
     </script>
     '''
     
     return copy_html
 
-# 3. 修改按钮创建部分，将原来的列布局改为固定定位：
-def create_message_actions_optimized(message_index, message_text, question=None):
-    """创建优化的消息操作按钮组"""
-    # 不再使用列布局，直接使用HTML和CSS固定定位
-    copy_html = create_copy_button_html(message_index, message_text)
-# 4. 在生成AI回答的函数中，替换按钮创建部分：
+# ---------- 创建重新生成按钮HTML ----------
+def create_regenerate_button_html(message_index, question):
+    """创建重新生成按钮HTML"""
+    
+    regenerate_html = f'''
+    <div class="message-actions">
+        <button onclick="regenerateAnswer{message_index}()" 
+                class="action-button regenerate-button"
+                title="Regenerate answer"
+                id="regen-btn-{message_index}">
+            🔄
+        </button>
+    </div>
+    
+    <script>
+    function regenerateAnswer{message_index}() {{
+        const button = document.getElementById('regen-btn-{message_index}');
+        button.classList.add('loading');
+        button.innerHTML = '⏳';
+        
+        // 触发Streamlit的重新运行
+        // 这里需要通过Streamlit的会话状态来处理
+        window.parent.postMessage({{
+            type: 'regenerate',
+            messageIndex: {message_index},
+            question: `{question.replace('`', '\\`').replace('\\', '\\\\').replace("'", "\\'").replace('"', '\\"')}`
+        }}, '*');
+    }}
+    </script>
+    '''
+    
+    return regenerate_html
+
+# ---------- 处理重新生成请求 ----------
+def handle_regenerate_request():
+    """处理重新生成回答的请求"""
+    if st.session_state.regenerate_question is not None and st.session_state.regenerate_index is not None:
+        question = st.session_state.regenerate_question
+        message_index = st.session_state.regenerate_index
+        
+        try:
+            # 找到对应的问题在messages中的位置
+            # message_index是AI回答的索引，对应的问题应该在前一个位置
+            if message_index > 0 and message_index < len(st.session_state.messages):
+                # 移除要重新生成的AI回答
+                st.session_state.messages = st.session_state.messages[:message_index]
+                
+                # 同样调整对话历史
+                # 每个用户问题对应一个 HumanMessage 和一个 AIMessage
+                pairs_to_keep = message_index // 2
+                st.session_state.chat_history = st.session_state.chat_history[:pairs_to_keep * 2]
+                
+                # 添加问题（如果还没有）
+                if not st.session_state.messages or st.session_state.messages[-1][0] != "user":
+                    st.session_state.messages.append(("user", question))
+                    st.session_state.chat_history.append(HumanMessage(content=question))
+                
+                # 清除重新生成请求
+                st.session_state.regenerate_question = None
+                st.session_state.regenerate_index = None
+                
+                return question  # 返回问题以便重新生成回答
+                
+        except Exception as e:
+            st.error(f"处理重新生成请求时出错: {e}")
+            st.session_state.regenerate_question = None
+            st.session_state.regenerate_index = None
+    
+    return None
+
+# ---------- 从本地 Markdown 文件获取文档内容 ----------
+def fetch_document_from_file(file_path):
+    try:
+        with open(file_path, "r", encoding="utf-8") as file:
+            return file.read()
+    except FileNotFoundError:
+        st.error(f"文件未找到: {file_path}")
+        return ""
+    except Exception as e:
+        st.error(f"无法读取文件: {e}")
+        return ""
+
+# ---------- 处理上传文件 ----------
+def process_uploaded_file(uploaded_file):
+    """处理上传的文件并提取文本内容"""
+    try:
+        file_extension = uploaded_file.name.split('.')[-1].lower()
+        
+        if file_extension == 'txt':
+            content = str(uploaded_file.read(), "utf-8")
+        elif file_extension == 'md':
+            content = str(uploaded_file.read(), "utf-8")
+        elif file_extension == 'pdf':
+            pdf_reader = PyPDF2.PdfReader(io.BytesIO(uploaded_file.read()))
+            content = ""
+            for page_num, page in enumerate(pdf_reader.pages):
+                page_text = page.extract_text()
+                content += f"\n[第{page_num+1}页]\n{page_text}"
+        elif file_extension in ['docx', 'doc']:
+            # 保存临时文件
+            with tempfile.NamedTemporaryFile(delete=False, suffix=f'.{file_extension}') as tmp_file:
+                tmp_file.write(uploaded_file.read())
+                tmp_file_path = tmp_file.name
+            
+            content = docx2txt.process(tmp_file_path)
+            os.unlink(tmp_file_path)  # 删除临时文件
+        else:
+            st.error(f"不支持的文件格式: {file_extension}")
+            return ""
+        
+        # 验证内容是否成功提取
+        if not content or len(content.strip()) == 0:
+            st.error(f"文件 {uploaded_file.name} 内容为空或无法提取")
+            return ""
+        
+        st.success(f"成功提取 {uploaded_file.name}，内容长度: {len(content)} 字符")
+        return content
+        
+    except Exception as e:
+        st.error(f"处理文件 {uploaded_file.name} 时出错: {str(e)}")
+        return ""
+
+# ---------- 测试检索器功能 ----------
+def test_retriever(question="测试"):
+    """测试检索器是否正常工作"""
+    try:
+        retriever = build_retriever()
+        if retriever:
+            docs = retriever.invoke(question)
+            return docs
+        return []
+    except Exception as e:
+        st.error(f"测试检索器时出错: {e}")
+        return []
+
+# ---------- 构建检索器 ----------
+def build_retriever():
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        st.error("请先设置环境变量 OPENAI_API_KEY")
+        st.stop()
+    
+    all_docs = []
+    
+    # 从本地文件获取文档内容
+    DOCUMENT_FILE_PATH = "测试.md"
+    if os.path.exists(DOCUMENT_FILE_PATH):
+        raw_docs = fetch_document_from_file(DOCUMENT_FILE_PATH)
+        if raw_docs:
+            all_docs.append(raw_docs)
+    
+    # 添加上传的文档内容
+    if 'uploaded_docs' in st.session_state and st.session_state.uploaded_docs:
+        all_docs.extend(st.session_state.uploaded_docs)
+        st.info(f"已加载 {len(st.session_state.uploaded_docs)} 个上传文档到知识库")
+    
+    if not all_docs:
+        st.warning("没有找到任何文档内容，AI将仅使用自身知识回答问题")
+        return None
+    
+    # 切分长文档
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
+    docs = text_splitter.create_documents(all_docs)
+    
+    st.info(f"知识库已构建，包含 {len(docs)} 个文档片段")
+    
+    embeddings = OpenAIEmbeddings(openai_api_key=api_key)
+    vectorstore = FAISS.from_documents(docs, embeddings)
+    return vectorstore.as_retriever(search_kwargs={"k": 4})
+
+# ---------- 构建问答链（带记忆功能） ----------
+def get_qa_chain_with_memory():
+    llm = ChatOpenAI(model_name="gpt-4o", temperature=0, openai_api_key=os.getenv("OPENAI_API_KEY"))
+    
+    # 改进的系统提示，允许模型在找不到相关信息时使用自身知识
+    system = (
+        "你是一个乐于助人的 AI 助手。\n"
+        "请首先基于下面提供的上下文信息回答问题。如果上下文中包含相关信息，请优先使用这些信息。"
+        "如果上下文中没有相关信息，请使用你的知识和经验来回答问题，并在回答开头说明'基于我的一般知识'。\n"
+        "请保持回答的准确性和有用性。\n\n"
+        "上下文信息:\n{context}\n\n"
+        "请结合对话历史和上下文信息来回答用户的问题。"
+    )
+    
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", system),
+        MessagesPlaceholder(variable_name="chat_history"),
+        ("human", "{question}")
+    ])
+    
+    def format_docs(docs):
+        if not docs:
+            return "没有找到相关的上下文信息。"
+        formatted = "\n\n".join(d.page_content for d in docs)
+        return formatted
+    
+    def get_context_and_question(inputs):
+        # 每次调用时重新构建检索器，确保使用最新的文档
+        retriever = build_retriever()
+        if retriever:
+            try:
+                context_docs = retriever.invoke(inputs["question"])
+                context = format_docs(context_docs)
+                if context != "没有找到相关的上下文信息。":
+                    st.info(f"从知识库中找到 {len(context_docs)} 个相关文档片段")
+                else:
+                    st.info("未在知识库中找到相关信息，将使用AI一般知识回答")
+            except Exception as e:
+                st.warning(f"检索时出错: {e}")
+                context = "检索出错，没有找到相关的上下文信息。"
+        else:
+            context = "没有找到相关的上下文信息。"
+            st.info("知识库为空，将使用AI一般知识回答")
+        
+        return {
+            "context": context,
+            "question": inputs["question"],
+            "chat_history": inputs["chat_history"]
+        }
+    
+    chain = (
+        get_context_and_question
+        | prompt
+        | llm
+        | StrOutputParser()
+    )
+    
+    return chain
+
+# ---------- 侧边栏功能 ----------
+def setup_sidebar():
+    with st.sidebar:
+        st.markdown("### 📁 文件上传")
+        
+        # 文件上传器
+        uploaded_files = st.file_uploader(
+            "上传文档文件",
+            type=['txt', 'md', 'pdf', 'docx', 'doc'],
+            accept_multiple_files=True,
+            help="支持的格式：TXT, MD, PDF, DOCX, DOC"
+        )
+        
+        if uploaded_files:
+            # 初始化会话状态
+            if 'uploaded_docs' not in st.session_state:
+                st.session_state.uploaded_docs = []
+            if 'uploaded_files_info' not in st.session_state:
+                st.session_state.uploaded_files_info = []
+            
+            # 处理新上传的文件
+            existing_files = [info['name'] for info in st.session_state.uploaded_files_info]
+            new_files_processed = 0
+            
+            for uploaded_file in uploaded_files:
+                if uploaded_file.name not in existing_files:
+                    with st.spinner(f"正在处理文件: {uploaded_file.name}"):
+                        content = process_uploaded_file(uploaded_file)
+                        if content:
+                            # 添加文档内容
+                            st.session_state.uploaded_docs.append(content)
+                            
+                            # 保存文件信息
+                            st.session_state.uploaded_files_info.append({
+                                'name': uploaded_file.name,
+                                'size': uploaded_file.size,
+                                'content_length': len(content)
+                            })
+                            
+                            new_files_processed += 1
+                            st.success(f"✅ {uploaded_file.name} 处理成功！")
+                        else:
+                            st.error(f"❌ {uploaded_file.name} 处理失败！")
+            
+            if new_files_processed > 0:
+                # 重新构建chain（每次都会重新构建检索器）
+                st.session_state.chain = get_qa_chain_with_memory()
+                st.success(f"🎉 成功处理 {new_files_processed} 个新文件！知识库已更新。")
+                st.rerun()
+        
+        # 显示已上传的文件
+        if 'uploaded_files_info' in st.session_state and st.session_state.uploaded_files_info:
+            st.markdown("### 📋 已上传文件")
+            for i, file_info in enumerate(st.session_state.uploaded_files_info):
+                with st.expander(f"📄 {file_info['name']}", expanded=False):
+                    st.write(f"**文件大小:** {file_info['size']} bytes")
+                    st.write(f"**内容长度:** {file_info['content_length']} 字符")
+                    
+                    # 显示文档内容预览
+                    if 'uploaded_docs' in st.session_state and i < len(st.session_state.uploaded_docs):
+                        preview = st.session_state.uploaded_docs[i][:200] + "..." if len(st.session_state.uploaded_docs[i]) > 200 else st.session_state.uploaded_docs[i]
+                        st.text_area("内容预览:", preview, height=100, disabled=True)
+        
+        st.markdown("---")
+        
+        # 显示知识库状态
+        if 'uploaded_docs' in st.session_state:
+            total_chars = sum(len(doc) for doc in st.session_state.uploaded_docs)
+            st.markdown("### 📊 知识库状态")
+            st.metric("文档数量", len(st.session_state.uploaded_docs))
+            st.metric("总字符数", f"{total_chars:,}")
+            
+            # 测试检索功能
+            if st.button("🔍 测试知识库检索", use_container_width=True):
+                test_query = st.text_input("输入测试问题:", value="学生手册", key="test_query")
+                if test_query:
+                    with st.spinner("正在测试检索..."):
+                        docs = test_retriever(test_query)
+                        if docs:
+                            st.success(f"✅ 检索成功！找到 {len(docs)} 个相关片段")
+                            with st.expander("查看检索结果"):
+                                for i, doc in enumerate(docs):
+                                    st.write(f"**片段 {i+1}:**")
+                                    st.write(doc.page_content[:300] + "...")
+                        else:
+                            st.warning("⚠️ 未找到相关内容")
+        
+        st.markdown("---")
+        
+        # 清除对话历史按钮
+        if st.button("🗑️ 清除对话历史", use_container_width=True):
+            st.session_state.messages = []
+            st.session_state.chat_history = []
+            st.session_state.regenerate_question = None
+            st.session_state.regenerate_index = None
+            st.success("对话历史已清除！")
+            st.rerun()
+        
+        # 清除上传文件按钮
+        if st.button("📁 清除上传文件", use_container_width=True):
+            if 'uploaded_docs' in st.session_state:
+                del st.session_state.uploaded_docs
+            if 'uploaded_files_info' in st.session_state:
+                del st.session_state.uploaded_files_info
+            st.session_state.chain = get_qa_chain_with_memory()
+            st.success("所有上传文件已清除！")
+            st.rerun()
+        
+        st.markdown("---")
+        
+        # 使用说明
+        with st.expander("📖 使用说明"):
+            st.markdown("""
+            **功能特点：**
+            - 🔍 智能检索：从知识库中查找相关信息  
+            - 🧠 知识融合：找不到时使用AI自身知识回答
+            - 💭 对话记忆：记住之前的对话内容
+            - 📁 文件上传：支持多种格式文档
+            - 📋 一键复制：直接点击复制AI回答到剪贴板
+            - 🔄 重新回答：不满意可重新生成回答
+            
+            **使用方法：**
+            1. 上传相关文档文件（会自动处理并加入知识库）
+            2. 在下方输入框中提问
+            3. AI会结合文档内容和对话历史回答
+            4. 使用底部按钮进行复制或重新生成
+            
+            **注意事项：**
+            - 文件上传后会自动构建知识库
+            - 大文件处理可能需要几秒钟时间
+            - 支持同时上传多个文件
+            - 复制功能支持现代浏览器的一键复制
+            - 重新回答会基于相同问题生成新答案
+            """)
+
+# ---------- 生成AI回答的函数 ----------
 def generate_ai_response(prompt, msgs):
     """生成AI回答"""
     try:
-        # ... 现有的生成逻辑保持不变 ...
+        # 准备输入数据，包含对话历史
+        chain_input = {
+            "question": prompt,
+            "chat_history": st.session_state.chat_history
+        }
         
-        # 在函数最后，替换原来的按钮创建代码：
+        # 显示处理状态
+        with st.spinner("正在思考中..."):
+            # 流式输出回答
+            response = st.write_stream(st.session_state.chain.stream(chain_input))
+        
+        # 保存消息到历史记录
+        st.session_state.messages.append(("assistant", response))
+        
+        # 更新对话历史（用于记忆功能）
+        st.session_state.chat_history.extend([
+            HumanMessage(content=prompt),
+            AIMessage(content=response)
+        ])
+        
+        # 限制对话历史长度，避免token过多
+        if len(st.session_state.chat_history) > 20:
+            st.session_state.chat_history = st.session_state.chat_history[-20:]
+        
+        # 添加按钮组 - 左下角排列
         message_index = len(st.session_state.messages) - 1
         
-        # 使用优化的按钮（固定定位在左下角）
-        copy_html = create_copy_button_html(message_index, response)
-        st.components.v1.html(copy_html, height=0)
+        # 使用HTML创建按钮组
+        col1, col2 = st.columns([2, 8])
         
-        # 保留Streamlit的重新生成按钮功能，但隐藏文字
-        col1, col2, col3 = st.columns([1, 1, 8])
+        with col1:
+            # 创建按钮组HTML
+            buttons_html = f'''
+            <div class="message-actions">
+                <button onclick="copyToClipboard{message_index}()" 
+                        class="action-button copy-button"
+                        title="Copy to clipboard"
+                        id="copy-btn-{message_index}">
+                    📋
+                </button>
+                <button onclick="regenerateAnswer{message_index}()" 
+                        class="action-button regenerate-button"
+                        title="Regenerate answer"
+                        id="regen-btn-{message_index}">
+                    🔄
+                </button>
+                <span id="copy-status-{message_index}" class="status-message"></span>
+            </div>
+            
+            <script>
+            function copyToClipboard{message_index}() {{
+                const text = `{response.replace('\\', '\\\\').replace('`', '\\`').replace("'", "\\'").replace('"', '\\"').replace('\n', '\\n').replace('\r', '\\r')}`;
+                const statusElement = document.getElementById('copy-status-{message_index}');
+                const button = document.getElementById('copy-btn-{message_index}');
+                
+                if (navigator.clipboard && window.isSecureContext) {{
+                    navigator.clipboard.writeText(text).then(function() {{
+                        button.classList.add('copied');
+                        statusElement.textContent = '✅';
+                        statusElement.classList.add('show');
+                        setTimeout(() => {{
+                            button.classList.remove('copied');
+                            statusElement.classList.remove('show');
+                            statusElement.textContent = '';
+                        }}, 2000);
+                    }}).catch(function(err) {{
+                        fallbackCopy{message_index}(text, statusElement, button);
+                    }});
+                }} else {{
+                    fallbackCopy{message_index}(text, statusElement, button);
+                }}
+            }}
+            
+            function fallbackCopy{message_index}(text, statusElement, button) {{
+                const textArea = document.createElement('textarea');
+                textArea.value = text;
+                textArea.style.position = 'fixed';
+                textArea.style.left = '-999999px';
+                textArea.style.top = '-999999px';
+                document.body.appendChild(textArea);
+                textArea.focus();
+                textArea.select();
+                
+                try {{
+                    const successful = document.execCommand('copy');
+                    if (successful) {{
+                        button.classList.add('copied');
+                        statusElement.textContent = '✅';
+                        statusElement.classList.add('show');
+                    }} else {{
+                        statusElement.textContent = '❌';
+                        statusElement.classList.add('show');
+                    }}
+                }} catch (err) {{
+                    statusElement.textContent = '❌';
+                    statusElement.classList.add('show');
+                }}
+                
+                document.body.removeChild(textArea);
+                setTimeout(() => {{
+                    button.classList.remove('copied');
+                    statusElement.classList.remove('show');
+                    statusElement.textContent = '';
+                }}, 2000);
+            }}
+            
+            function regenerateAnswer{message_index}() {{
+                // 通过设置会话状态触发重新生成
+                const button = document.getElementById('regen-btn-{message_index}');
+                button.classList.add('loading');
+                button.innerHTML = '⏳';
+                
+                // 这里需要通过Streamlit的机制来处理重新生成
+                // 实际的重新生成逻辑在Python端处理
+            }}
+            </script>
+            '''
+            
+            st.components.v1.html(buttons_html, height=60)
+        
+        # Streamlit重新生成按钮（隐藏但功能完整）
         with col2:
-            if st.button("", key=f"regen_new_{message_index}", help="重新生成回答"):
+            if st.button("", key=f"hidden_regen_{message_index}", help="Regenerate", 
+                        label_visibility="hidden"):
                 st.session_state.regenerate_question = prompt
                 st.session_state.regenerate_index = message_index
                 st.rerun()
                 
     except Exception as e:
-        # ... 错误处理保持不变 ...
+        error_msg = f"生成回答时出错: {str(e)}"
+        st.error(error_msg)
+        st.session_state.messages.append(("assistant", "抱歉，生成回答时出现了错误。请检查网络连接和API密钥。"))
+        # 显示详细错误信息供调试
+        with st.expander("错误详情"):
+            st.code(str(e))
 
-# 5. 在主函数的聊天历史显示部分，也要相应修改：
-# 在显示聊天历史的循环中，替换按钮创建部分：
-for i, (role, text) in enumerate(st.session_state.messages):
-    with msgs.chat_message(role):
-        st.write(text)
-        
-        # 为AI回答添加操作按钮
-        if role == "assistant":
-            # 寻找对应的用户问题
-            question = None
-            if i > 0 and st.session_state.messages[i-1][0] == "user":
-                question = st.session_state.messages[i-1][1]
+# ---------- Streamlit 主界面 ----------
+def main():
+    # 初始化会话状态
+    initialize_session_state()
+    
+    # 页面标题
+    st.markdown("""
+    <div class="main-header">
+        <h1>🦜🔗 重庆科技大学</h1>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # 设置侧边栏
+    setup_sidebar()
+    
+    # 初始化链
+    if "chain" not in st.session_state:
+        st.session_state.chain = get_qa_chain_with_memory()
+    
+    # 主聊天区域
+    st.markdown("### 💬 智能问答")
+    
+    # 处理重新生成请求
+    regenerate_question = handle_regenerate_request()
+    
+    # 聊天消息容器
+    msgs = st.container(height=500)
+    
+    # 显示聊天历史
+    for i, (role, text) in enumerate(st.session_state.messages):
+        with msgs.chat_message(role):
+            st.write(text)
             
-            # 使用优化的按钮
-            copy_html = create_copy_button_html(i, text)
-            st.components.v1.html(copy_html, height=0)
-            
-            # 保留隐藏的重新生成按钮
-            if question is not None:
-                col1, col2, col3 = st.columns([1, 1, 8])
+            # 为AI回答添加操作按钮
+            if role == "assistant":
+                # 寻找对应的用户问题
+                question = None
+                if i > 0 and st.session_state.messages[i-1][0] == "user":
+                    question = st.session_state.messages[i-1][1]
+                
+                # 创建按钮组 - 左下角排列
+                col1, col2 = st.columns([2, 8])
+                
+                with col1:
+                    # 创建按钮组HTML
+                    buttons_html = f'''
+                    <div class="message-actions">
+                        <button onclick="copyToClipboard{i}()" 
+                                class="action-button copy-button"
+                                title="Copy to clipboard"
+                                id="copy-btn-{i}">
+                            📋
+                        </button>
+                        <button onclick="triggerRegenerate{i}()" 
+                                class="action-button regenerate-button"
+                                title="Regenerate answer"
+                                id="regen-btn-{i}">
+                            🔄
+                        </button>
+                        <span id="copy-status-{i}" class="status-message"></span>
+                    </div>
+                    
+                    <script>
+                    function copyToClipboard{i}() {{
+                        const text = `{text.replace('\\', '\\\\').replace('`', '\\`').replace("'", "\\'").replace('"', '\\"').replace('\n', '\\n').replace('\r', '\\r')}`;
+                        const statusElement = document.getElementById('copy-status-{i}');
+                        const button = document.getElementById('copy-btn-{i}');
+                        
+                        if (navigator.clipboard && window.isSecureContext) {{
+                            navigator.clipboard.writeText(text).then(function() {{
+                                button.classList.add('copied');
+                                statusElement.textContent = '✅';
+                                statusElement.classList.add('show');
+                                setTimeout(() => {{
+                                    button.classList.remove('copied');
+                                    statusElement.classList.remove('show');
+                                    statusElement.textContent = '';
+                                }}, 2000);
+                            }}).catch(function(err) {{
+                                fallbackCopy{i}(text, statusElement, button);
+                            }});
+                        }} else {{
+                            fallbackCopy{i}(text, statusElement, button);
+                        }}
+                    }}
+                    
+                    function fallbackCopy{i}(text, statusElement, button) {{
+                        const textArea = document.createElement('textarea');
+                        textArea.value = text;
+                        textArea.style.position = 'fixed';
+                        textArea.style.left = '-999999px';
+                        textArea.style.top = '-999999px';
+                        document.body.appendChild(textArea);
+                        textArea.focus();
+                        textArea.select();
+                        
+                        try {{
+                            const successful = document.execCommand('copy');
+                            if (successful) {{
+                                button.classList.add('copied');
+                                statusElement.textContent = '✅';
+                                statusElement.classList.add('show');
+                            }} else {{
+                                statusElement.textContent = '❌';
+                                statusElement.classList.add('show');
+                            }}
+                        }} catch (err) {{
+                            statusElement.textContent = '❌';
+                            statusElement.classList.add('show');
+                        }}
+                        
+                        document.body.removeChild(textArea);
+                        setTimeout(() => {{
+                            button.classList.remove('copied');
+                            statusElement.classList.remove('show');
+                            statusElement.textContent = '';
+                        }}, 2000);
+                    }}
+                    
+                    function triggerRegenerate{i}() {{
+                        const button = document.getElementById('regen-btn-{i}');
+                        button.classList.add('loading');
+                        button.innerHTML = '⏳';
+                        
+                        // 触发隐藏的Streamlit按钮
+                        const hiddenButton = document.querySelector('[data-testid="stButton"] button[title="Regenerate {i}"]');
+                        if (hiddenButton) {{
+                            hiddenButton.click();
+                        }}
+                    }}
+                    </script>
+                    '''
+                    
+                    st.components.v1.html(buttons_html, height=60)
+                
+                # 隐藏的重新生成按钮
                 with col2:
-                    if st.button("", key=f"regen_history_{i}", help="重新生成回答"):
-                        st.session_state.regenerate_question = question
-                        st.session_state.regenerate_index = i
-                        st.rerun()
+                    if question is not None:
+                        if st.button("", key=f"hidden_regen_history_{i}", 
+                                   help=f"Regenerate {i}", label_visibility="hidden"):
+                            st.session_state.regenerate_question = question
+                            st.session_state.regenerate_index = i
+                            st.rerun()
+    
+    # 如果有重新生成请求，先处理它
+    if regenerate_question:
+        with msgs.chat_message("assistant"):
+            st.info("🔄 正在重新生成回答...")
+            generate_ai_response(regenerate_question, msgs)
+        st.rerun()
+    
+    # 用户输入
+    if prompt := st.chat_input("请输入你的问题..."):
+        # 添加用户消息
+        st.session_state.messages.append(("user", prompt))
+        with msgs.chat_message("user"):
+            st.write(prompt)
+        
+        # 生成AI回答
+        with msgs.chat_message("assistant"):
+            generate_ai_response(prompt, msgs)
+    
+    # 底部信息
+    st.markdown("---")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("对话轮数", len(st.session_state.messages) // 2)
+    with col2:
+        uploaded_count = len(st.session_state.get('uploaded_files_info', []))
+        st.metric("已上传文件", uploaded_count)
+    with col3:
+        memory_count = len(st.session_state.chat_history) // 2
+        st.metric("记忆对话数", memory_count)
+
+if __name__ == "__main__":
+    main()
