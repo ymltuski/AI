@@ -55,90 +55,77 @@ st.markdown("""
         margin-bottom: 1rem;
     }
     
-    /* 统一的按钮容器样式 */
-    .button-container {
+    /* 消息按钮组样式 */
+    .message-actions {
         display: flex;
         gap: 8px;
         margin-top: 10px;
         margin-bottom: 10px;
         align-items: center;
-        justify-content: flex-start;
     }
     
-    /* 统一的按钮样式 - 基础样式 */
+    /* 统一的按钮样式 */
     .action-button {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        border: none;
-        border-radius: 8px;
-        padding: 8px 16px;
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 6px;
+        padding: 6px 12px;
         cursor: pointer;
         font-size: 14px;
-        font-weight: 500;
-        transition: all 0.3s ease;
+        color: #495057;
+        transition: all 0.2s ease;
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        gap: 6px;
-        min-width: 100px;
+        gap: 4px;
+        min-width: 80px;
         text-decoration: none;
         font-family: inherit;
-        box-shadow: 0 2px 4px rgba(102, 126, 234, 0.3);
-        position: relative;
-        overflow: hidden;
-    }
-    
-    .action-button:before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: -100%;
-        width: 100%;
-        height: 100%;
-        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
-        transition: left 0.5s;
-    }
-    
-    .action-button:hover:before {
-        left: 100%;
     }
     
     .action-button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-        background: linear-gradient(135deg, #5a6fd8 0%, #6a42a0 100%);
+        background: #e9ecef;
+        border-color: #adb5bd;
+        transform: translateY(-1px);
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
     
-    .action-button:active {
-        transform: translateY(0);
-        box-shadow: 0 2px 4px rgba(102, 126, 234, 0.3);
-    }
-    
-    /* 复制按钮特殊样式 */
+    /* 复制按钮样式 */
     .copy-button {
-        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
-        box-shadow: 0 2px 4px rgba(40, 167, 69, 0.3);
+        background: #007bff;
+        color: white;
+        border-color: #007bff;
     }
     
     .copy-button:hover {
-        background: linear-gradient(135deg, #218838 0%, #1ca085 100%);
-        box-shadow: 0 4px 12px rgba(40, 167, 69, 0.4);
+        background: #0056b3;
+        border-color: #0056b3;
+        color: white;
     }
     
     .copy-button.copied {
-        background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);
-        box-shadow: 0 4px 12px rgba(23, 162, 184, 0.4);
+        background: #28a745;
+        border-color: #28a745;
+        color: white;
     }
     
-    /* 重新生成按钮特殊样式 */
+    /* 重新生成按钮样式 */
     .regenerate-button {
-        background: linear-gradient(135deg, #fd7e14 0%, #e55353 100%);
-        box-shadow: 0 2px 4px rgba(253, 126, 20, 0.3);
+        background: #17a2b8;
+        color: white;
+        border-color: #17a2b8;
     }
     
     .regenerate-button:hover {
-        background: linear-gradient(135deg, #e8690b 0%, #d23430 100%);
-        box-shadow: 0 4px 12px rgba(253, 126, 20, 0.4);
+        background: #138496;
+        border-color: #117a8b;
+        color: white;
+    }
+    
+    .regenerate-button.loading {
+        background: #ffc107;
+        border-color: #ffc107;
+        color: #212529;
     }
     
     /* 状态提示样式 */
@@ -146,45 +133,12 @@ st.markdown("""
         font-size: 12px;
         color: #28a745;
         margin-left: 8px;
-        font-weight: 500;
-        opacity: 0;
-        transition: opacity 0.3s ease;
+        display: none;
+        align-items: center;
     }
     
     .status-message.show {
-        opacity: 1;
-    }
-    
-    /* Streamlit按钮覆盖样式 */
-    div[data-testid="column"] button {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
-        color: white !important;
-        border: none !important;
-        border-radius: 8px !important;
-        padding: 8px 16px !important;
-        font-size: 14px !important;
-        font-weight: 500 !important;
-        transition: all 0.3s ease !important;
-        box-shadow: 0 2px 4px rgba(102, 126, 234, 0.3) !important;
-        min-width: 100px !important;
-        height: auto !important;
-    }
-    
-    div[data-testid="column"] button:hover {
-        transform: translateY(-2px) !important;
-        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4) !important;
-        background: linear-gradient(135deg, #5a6fd8 0%, #6a42a0 100%) !important;
-    }
-    
-    /* 复制按钮特殊颜色 */
-    div[data-testid="column"] button[kind="primary"] {
-        background: linear-gradient(135deg, #28a745 0%, #20c997 100%) !important;
-        box-shadow: 0 2px 4px rgba(40, 167, 69, 0.3) !important;
-    }
-    
-    div[data-testid="column"] button[kind="primary"]:hover {
-        background: linear-gradient(135deg, #218838 0%, #1ca085 100%) !important;
-        box-shadow: 0 4px 12px rgba(40, 167, 69, 0.4) !important;
+        display: inline-flex;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -205,52 +159,69 @@ def initialize_session_state():
     if "regenerate_index" not in st.session_state:
         st.session_state.regenerate_index = None
 
-# ---------- 创建统一样式的按钮组 ----------
-def create_action_buttons_html(message_index, message_text, question=None):
-    """创建统一样式的操作按钮HTML"""
+# ---------- 重新生成功能的Streamlit组件 ----------
+def create_message_actions(message_index, message_text, question=None):
+    """创建消息操作按钮组"""
+    col1, col2, col3 = st.columns([2, 2, 6])
+    
+    with col1:
+        # 复制按钮
+        if st.button("📋 复制", key=f"copy_{message_index}", help="复制消息到剪贴板"):
+            # 使用JavaScript复制功能
+            copy_js = f"""
+            <script>
+            navigator.clipboard.writeText(`{message_text.replace('`', '\\`').replace('\\', '\\\\')}`).then(function() {{
+                console.log('复制成功');
+            }}).catch(function(err) {{
+                console.error('复制失败:', err);
+            }});
+            </script>
+            """
+            st.components.v1.html(copy_js, height=0)
+            st.success("已复制到剪贴板！", icon="✅")
+    
+    with col2:
+        # 重新生成按钮（仅对AI回答显示）
+        if question is not None:
+            if st.button("🔄 重新回答", key=f"regen_{message_index}", help="重新生成回答"):
+                # 设置重新生成的请求
+                st.session_state.regenerate_question = question
+                st.session_state.regenerate_index = message_index
+                st.rerun()
+
+# ---------- 简化的HTML复制按钮 ----------
+def create_copy_button_html(message_index, message_text):
+    """创建简单的复制按钮HTML"""
     # 转义文本中的特殊字符
     escaped_text = message_text.replace('\\', '\\\\').replace('`', '\\`').replace("'", "\\'").replace('"', '\\"').replace('\n', '\\n').replace('\r', '\\r')
     
-    # 决定是否显示重新生成按钮
-    regenerate_button = ""
-    if question is not None:
-        regenerate_button = f'''
-        <button onclick="triggerRegenerate{message_index}()" 
-                class="action-button regenerate-button"
-                id="regen-btn-{message_index}">
-            🔄 重新回答
-        </button>
-        '''
-    
-    buttons_html = f'''
-    <div class="button-container">
+    copy_html = f'''
+    <div style="margin: 10px 0;">
         <button onclick="copyToClipboard{message_index}()" 
-                class="action-button copy-button"
-                id="copy-btn-{message_index}">
+                style="background: #007bff; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 14px;">
             📋 复制回答
         </button>
-        {regenerate_button}
-        <span id="copy-status-{message_index}" class="status-message"></span>
+        <span id="copy-status-{message_index}" style="margin-left: 10px; color: #28a745; font-size: 12px;"></span>
     </div>
     
     <script>
     function copyToClipboard{message_index}() {{
         const text = `{escaped_text}`;
         const statusElement = document.getElementById('copy-status-{message_index}');
-        const buttonElement = document.getElementById('copy-btn-{message_index}');
         
         if (navigator.clipboard && window.isSecureContext) {{
             navigator.clipboard.writeText(text).then(function() {{
-                showCopySuccess{message_index}(statusElement, buttonElement);
+                statusElement.textContent = '✅ 已复制';
+                setTimeout(() => statusElement.textContent = '', 2000);
             }}).catch(function(err) {{
-                fallbackCopy{message_index}(text, statusElement, buttonElement);
+                fallbackCopy{message_index}(text, statusElement);
             }});
         }} else {{
-            fallbackCopy{message_index}(text, statusElement, buttonElement);
+            fallbackCopy{message_index}(text, statusElement);
         }}
     }}
     
-    function fallbackCopy{message_index}(text, statusElement, buttonElement) {{
+    function fallbackCopy{message_index}(text, statusElement) {{
         const textArea = document.createElement('textarea');
         textArea.value = text;
         textArea.style.position = 'fixed';
@@ -263,55 +234,21 @@ def create_action_buttons_html(message_index, message_text, question=None):
         try {{
             const successful = document.execCommand('copy');
             if (successful) {{
-                showCopySuccess{message_index}(statusElement, buttonElement);
+                statusElement.textContent = '✅ 已复制';
             }} else {{
-                showCopyError{message_index}(statusElement);
+                statusElement.textContent = '❌ 复制失败';
             }}
         }} catch (err) {{
-            showCopyError{message_index}(statusElement);
+            statusElement.textContent = '❌ 复制失败';
         }}
         
         document.body.removeChild(textArea);
-    }}
-    
-    function showCopySuccess{message_index}(statusElement, buttonElement) {{
-        statusElement.textContent = '✅ 已复制';
-        statusElement.classList.add('show');
-        buttonElement.classList.add('copied');
-        buttonElement.innerHTML = '✅ 已复制';
-        
-        setTimeout(() => {{
-            statusElement.classList.remove('show');
-            buttonElement.classList.remove('copied');
-            buttonElement.innerHTML = '📋 复制回答';
-            setTimeout(() => statusElement.textContent = '', 300);
-        }}, 2000);
-    }}
-    
-    function showCopyError{message_index}(statusElement) {{
-        statusElement.textContent = '❌ 复制失败';
-        statusElement.style.color = '#dc3545';
-        statusElement.classList.add('show');
-        setTimeout(() => {{
-            statusElement.classList.remove('show');
-            setTimeout(() => {{
-                statusElement.textContent = '';
-                statusElement.style.color = '#28a745';
-            }}, 300);
-        }}, 2000);
-    }}
-    
-    function triggerRegenerate{message_index}() {{
-        // 这里需要通过Streamlit的机制来触发重新生成
-        // 由于HTML无法直接调用Streamlit的Python函数，这个功能通过Streamlit按钮实现
-        const regenButton = document.getElementById('regen-btn-{message_index}');
-        regenButton.innerHTML = '⏳ 处理中...';
-        regenButton.style.background = 'linear-gradient(135deg, #ffc107 0%, #fd7e14 100%)';
+        setTimeout(() => statusElement.textContent = '', 2000);
     }}
     </script>
     '''
     
-    return buttons_html
+    return copy_html
 
 # ---------- 处理重新生成请求 ----------
 def handle_regenerate_request():
@@ -672,18 +609,20 @@ def generate_ai_response(prompt, msgs):
         if len(st.session_state.chat_history) > 20:
             st.session_state.chat_history = st.session_state.chat_history[-20:]
         
-        # 添加统一样式的操作按钮
+        # 添加复制按钮和重新生成按钮
         message_index = len(st.session_state.messages) - 1
         
-        # 使用HTML创建统一样式的按钮组
-        buttons_html = create_action_buttons_html(message_index, response, prompt)
-        st.components.v1.html(buttons_html, height=80)
+        # 使用列布局创建按钮
+        col1, col2, col3 = st.columns([2, 2, 6])
         
-        # 添加隐藏的Streamlit重新生成按钮（用于实际触发功能）
-        col1, col2, col3 = st.columns([1, 1, 8])
+        with col1:
+            # 添加HTML复制按钮
+            copy_html = create_copy_button_html(message_index, response)
+            st.components.v1.html(copy_html, height=50)
+        
         with col2:
-            if st.button("", key=f"hidden_regen_{message_index}", help="重新生成回答", 
-                        label_visibility="hidden"):
+            # 重新生成按钮
+            if st.button("🔄 重新回答", key=f"regen_new_{message_index}", help="重新生成回答"):
                 st.session_state.regenerate_question = prompt
                 st.session_state.regenerate_index = message_index
                 st.rerun()
@@ -729,23 +668,25 @@ def main():
         with msgs.chat_message(role):
             st.write(text)
             
-            # 为AI回答添加统一样式的操作按钮
+            # 为AI回答添加操作按钮
             if role == "assistant":
                 # 寻找对应的用户问题
                 question = None
                 if i > 0 and st.session_state.messages[i-1][0] == "user":
                     question = st.session_state.messages[i-1][1]
                 
-                # 创建统一样式的按钮组
-                buttons_html = create_action_buttons_html(i, text, question)
-                st.components.v1.html(buttons_html, height=80)
+                # 创建按钮列
+                col1, col2, col3 = st.columns([2, 2, 6])
                 
-                # 添加隐藏的Streamlit重新生成按钮（用于实际触发功能）
-                if question is not None:
-                    col1, col2, col3 = st.columns([1, 1, 8])
-                    with col2:
-                        if st.button("", key=f"hidden_regen_history_{i}", 
-                                    help="重新生成回答", label_visibility="hidden"):
+                with col1:
+                    # 添加HTML复制按钮
+                    copy_html = create_copy_button_html(i, text)
+                    st.components.v1.html(copy_html, height=50)
+                
+                with col2:
+                    # 重新生成按钮
+                    if question is not None:
+                        if st.button("🔄 重新回答", key=f"regen_history_{i}", help="重新生成回答"):
                             st.session_state.regenerate_question = question
                             st.session_state.regenerate_index = i
                             st.rerun()
