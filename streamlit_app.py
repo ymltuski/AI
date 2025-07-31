@@ -1,28 +1,22 @@
 import streamlit as st
 import os
 import tempfile
-from pathlib import Path
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain_core.output_parsers import StrOutputParser
-from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.runnables import RunnablePassthrough
 from langchain.schema import Document
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.memory import ConversationBufferWindowMemory
-from langchain_community.document_loaders import (
-    TextLoader, 
-    PyPDFLoader, 
-    Docx2txtLoader,
-    CSVLoader
-)
-import pandas as pd
-from typing import List, Optional
+from langchain_core.messages import HumanMessage, AIMessage
+import docx2txt
+import PyPDF2
+import io
 
 # 页面配置
 st.set_page_config(
-    page_title="智能知识问答助手", 
-    page_icon="🤖", 
+    page_title="动手学大模型应用开发", 
+    page_icon="🦜🔗",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -31,433 +25,322 @@ st.set_page_config(
 st.markdown("""
 <style>
     .main-header {
-        font-size: 2.5rem;
-        font-weight: bold;
-        color: #1f77b4;
-        text-align: center;
-        padding: 20px 0;
-        background: linear-gradient(90deg, #f0f2f6, #ffffff);
+        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+        padding: 1rem;
         border-radius: 10px;
-        margin-bottom: 30px;
+        margin-bottom: 2rem;
+    }
+    .main-header h1 {
+        color: white;
+        text-align: center;
+        margin: 0;
     }
     .upload-section {
-        background-color: #f8f9fa;
-        padding: 20px;
+        border: 2px dashed #667eea;
         border-radius: 10px;
-        margin-bottom: 20px;
+        padding: 1rem;
+        margin: 1rem 0;
     }
-    .status-box {
-        padding: 10px;
-        border-radius: 5px;
-        margin: 10px 0;
+    .chat-container {
+        border-radius: 10px;
+        border: 1px solid #e0e0e0;
+        padding: 1rem;
     }
-    .success-box {
-        background-color: #d4edda;
-        border: 1px solid #c3e6cb;
-        color: #155724;
-    }
-    .warning-box {
-        background-color: #fff3cd;
-        border: 1px solid #ffeaa7;
-        color: #856404;
-    }
-    .info-box {
-        background-color: #d1ecf1;
-        border: 1px solid #bee5eb;
-        color: #0c5460;
+    .sidebar-info {
+        background-color: #f0f2f6;
+        padding: 1rem;
+        border-radius: 10px;
+        margin-bottom: 1rem;
     }
 </style>
 """, unsafe_allow_html=True)
 
-class EnhancedRAGSystem:
-    def __init__(self):
-        self.embeddings = None
-        self.vectorstore = None
-        self.memory = ConversationBufferWindowMemory(
-            k=10,  # 保留最近10轮对话
-            return_messages=True,
-            memory_key="chat_history"
-        )
-        # 自动加载本地测试文件
-        self.load_initial_document()
+# ---------- 1. 从本地 Markdown 文件获取文档内容 ----------
+def fetch_document_from_file(file_path):
+    try:
+        with open(file_path, "r", encoding="utf-8") as file:
+            return file.read()
+    except FileNotFoundError:
+        st.error(f"文件未找到: {file_path}")
+        return ""
+    except Exception as e:
+        st.error(f"无法读取文件: {e}")
+        return ""
+
+# ---------- 2. 处理上传文件 ----------
+def process_uploaded_file(uploaded_file):
+    """处理上传的文件并提取文本内容"""
+    try:
+        file_extension = uploaded_file.name.split('.')[-1].lower()
         
-    def load_initial_document(self):
-        """自动加载本地的测试.md文件（保持原有功能）"""
-        DOCUMENT_FILE_PATH = "测试.md"
-        if os.path.exists(DOCUMENT_FILE_PATH):
-            try:
-                with open(DOCUMENT_FILE_PATH, "r", encoding="utf-8") as file:
-                    content = file.read()
-                if content.strip():
-                    documents = [Document(page_content=content, metadata={"source": DOCUMENT_FILE_PATH, "filename": "测试.md"})]
-                    split_docs = self.split_documents(documents)
-                    self.initialize_embeddings()
-                    self.vectorstore = FAISS.from_documents(split_docs, self.embeddings)
-                    st.success(f"✅ 已自动加载本地文件：{DOCUMENT_FILE_PATH}")
-            except Exception as e:
-                st.warning(f"⚠️ 无法加载本地文件 {DOCUMENT_FILE_PATH}: {str(e)}")
-        else:
-            st.info("📝 本地测试.md文件不存在，请上传文档来构建知识库")
-    
-    def initialize_embeddings(self):
-        """初始化嵌入模型"""
-        api_key = os.getenv("OPENAI_API_KEY")
-        if not api_key:
-            st.error("❌ 请先设置环境变量 OPENAI_API_KEY")
-            st.stop()
-        
-        if self.embeddings is None:
-            self.embeddings = OpenAIEmbeddings(openai_api_key=api_key)
-        return self.embeddings
-    
-    def load_document(self, file_path: str, file_type: str) -> List[Document]:
-        """根据文件类型加载文档"""
-        try:
-            if file_type.lower() == 'txt' or file_type.lower() == 'md':
-                loader = TextLoader(file_path, encoding='utf-8')
-            elif file_type.lower() == 'pdf':
-                loader = PyPDFLoader(file_path)
-            elif file_type.lower() in ['docx', 'doc']:
-                loader = Docx2txtLoader(file_path)
-            elif file_type.lower() == 'csv':
-                loader = CSVLoader(file_path)
-            else:
-                # 默认尝试文本加载
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    content = f.read()
-                return [Document(page_content=content, metadata={"source": file_path})]
+        if file_extension == 'txt':
+            return str(uploaded_file.read(), "utf-8")
+        elif file_extension == 'md':
+            return str(uploaded_file.read(), "utf-8")
+        elif file_extension == 'pdf':
+            pdf_reader = PyPDF2.PdfReader(io.BytesIO(uploaded_file.read()))
+            text = ""
+            for page in pdf_reader.pages:
+                text += page.extract_text()
+            return text
+        elif file_extension in ['docx', 'doc']:
+            # 保存临时文件
+            with tempfile.NamedTemporaryFile(delete=False, suffix=f'.{file_extension}') as tmp_file:
+                tmp_file.write(uploaded_file.read())
+                tmp_file_path = tmp_file.name
             
-            return loader.load()
-        except Exception as e:
-            st.error(f"❌ 加载文件失败: {str(e)}")
-            return []
-    
-    def split_documents(self, documents: List[Document]) -> List[Document]:
-        """切分文档"""
-        text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=800,
-            chunk_overlap=100,
-            separators=["\n\n", "\n", "。", ".", " ", ""]
-        )
-        return text_splitter.split_documents(documents)
-    
-    def create_or_update_vectorstore(self, documents: List[Document]):
-        """创建或更新向量存储"""
-        if not documents:
-            return
-        
-        embeddings = self.initialize_embeddings()
-        
-        if self.vectorstore is None:
-            # 创建新的向量存储
-            self.vectorstore = FAISS.from_documents(documents, embeddings)
-            st.success(f"✅ 创建了新的知识库，包含 {len(documents)} 个文档片段")
+            text = docx2txt.process(tmp_file_path)
+            os.unlink(tmp_file_path)  # 删除临时文件
+            return text
         else:
-            # 增量更新现有向量存储
-            new_vectorstore = FAISS.from_documents(documents, embeddings)
-            self.vectorstore.merge_from(new_vectorstore)
-            st.success(f"✅ 知识库已更新，新增 {len(documents)} 个文档片段")
+            st.error(f"不支持的文件格式: {file_extension}")
+            return ""
+    except Exception as e:
+        st.error(f"处理文件时出错: {e}")
+        return ""
+
+# ---------- 3. 构建检索器 ----------
+def build_retriever(additional_docs=None):
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        st.error("请先设置环境变量 OPENAI_API_KEY")
+        st.stop()
     
-    def get_retriever(self):
-        """获取检索器"""
-        if self.vectorstore is None:
-            return None
-        return self.vectorstore.as_retriever(
-            search_type="similarity",
-            search_kwargs={"k": 3}  # 返回最相关的3个片段
-        )
+    all_docs = []
     
-    def build_qa_chain(self):
-        """构建问答链"""
-        retriever = self.get_retriever()
-        if retriever is None:
-            return None
-        
-        llm = ChatOpenAI(
-            model_name="gpt-4o", 
-            temperature=0.1, 
-            openai_api_key=os.getenv("OPENAI_API_KEY")
-        )
-        
-        # 改进的prompt模板，支持上下文记忆和自身知识回答
-        system_template = """你是一个智能的AI助手。请根据以下规则回答问题：
+    # 从本地文件获取文档内容
+    DOCUMENT_FILE_PATH = "测试.md"
+    if os.path.exists(DOCUMENT_FILE_PATH):
+        raw_docs = fetch_document_from_file(DOCUMENT_FILE_PATH)
+        if raw_docs:
+            all_docs.append(raw_docs)
+    
+    # 添加上传的文档内容
+    if additional_docs:
+        all_docs.extend(additional_docs)
+    
+    if not all_docs:
+        st.warning("没有找到任何文档内容")
+        return None
+    
+    # 切分长文档
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
+    docs = text_splitter.create_documents(all_docs)
+    
+    embeddings = OpenAIEmbeddings(openai_api_key=api_key)
+    vectorstore = FAISS.from_documents(docs, embeddings)
+    return vectorstore.as_retriever()
 
-1. 首先查看提供的知识库内容，如果能从中找到相关信息，请基于这些信息回答
-2. 如果知识库中没有相关信息，请结合你自身的知识和经验来回答问题
-3. 请结合对话历史来理解用户的问题，保持对话的连贯性
-4. 回答要准确、有用且友好
-
-知识库内容：
-{context}
-
-对话历史：
-{chat_history}
-
-请回答用户的问题。如果使用了知识库信息，请说明；如果使用了自身知识，也请适当说明。"""
-
-        prompt = ChatPromptTemplate.from_messages([
-            ("system", system_template),
-            ("human", "{question}")
-        ])
-        
-        def format_chat_history(messages):
-            """格式化聊天历史"""
-            if not messages:
-                return "暂无历史对话"
-            
-            formatted = []
-            for msg in messages[-6:]:  # 只取最近6条消息
-                if hasattr(msg, 'content'):
-                    role = "用户" if msg.type == "human" else "助手"
-                    formatted.append(f"{role}: {msg.content}")
-            return "\n".join(formatted)
-        
-        def get_relevant_docs(question):
-            """获取相关文档"""
-            if retriever:
-                docs = retriever.get_relevant_documents(question)
-                return "\n\n".join([doc.page_content for doc in docs]) if docs else "知识库中暂无相关信息"
-            return "知识库为空"
-        
-        chain = (
-            {
-                "context": lambda x: get_relevant_docs(x["question"]),
-                "chat_history": lambda x: format_chat_history(self.memory.chat_memory.messages),
-                "question": lambda x: x["question"]
+# ---------- 4. 构建问答链（带记忆功能） ----------
+def get_qa_chain_with_memory():
+    retriever = build_retriever(st.session_state.get('uploaded_docs', []))
+    llm = ChatOpenAI(model_name="gpt-4o", temperature=0, openai_api_key=os.getenv("OPENAI_API_KEY"))
+    
+    # 改进的系统提示，允许模型在找不到相关信息时使用自身知识
+    system = (
+        "你是一个乐于助人的 AI 助手。\n"
+        "请首先基于下面提供的上下文信息回答问题。如果上下文中没有相关信息，"
+        "请使用你的知识和经验来回答问题，并在回答开头说明这是基于你的一般知识。\n"
+        "请保持回答的准确性和有用性。\n\n"
+        "上下文信息:\n{context}\n\n"
+        "请结合对话历史和上下文信息来回答用户的问题。"
+    )
+    
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", system),
+        MessagesPlaceholder(variable_name="chat_history"),
+        ("human", "{question}")
+    ])
+    
+    def format_docs(docs):
+        if not docs:
+            return "没有找到相关的上下文信息。"
+        return "\n\n".join(d.page_content for d in docs)
+    
+    def get_context_and_question(inputs):
+        if retriever:
+            context = retriever.invoke(inputs["question"])
+            return {
+                "context": format_docs(context),
+                "question": inputs["question"],
+                "chat_history": inputs["chat_history"]
             }
-            | prompt
-            | llm
-            | StrOutputParser()
-        )
-        
-        return chain
-    
-    def add_to_memory(self, question: str, answer: str):
-        """添加到对话记忆"""
-        self.memory.chat_memory.add_user_message(question)
-        self.memory.chat_memory.add_ai_message(answer)
-
-def main():
-    # 初始化RAG系统
-    if 'rag_system' not in st.session_state:
-        st.session_state.rag_system = EnhancedRAGSystem()
-    
-    # 初始化聊天记录
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
-    
-    # 主标题
-    st.markdown('<div class="main-header">🤖 智能知识问答助手</div>', unsafe_allow_html=True)
-    
-    # 侧边栏 - 知识库管理
-    with st.sidebar:
-        st.header("📚 知识库管理")
-        
-        # 显示当前知识库状态
-        rag_system = st.session_state.rag_system
-        if rag_system.vectorstore is not None:
-            doc_count = rag_system.vectorstore.index.ntotal
-            st.markdown(f'<div class="status-box success-box">✅ 知识库已准备就绪<br>包含 {doc_count} 个文档片段</div>', unsafe_allow_html=True)
-            
-            # 显示本地文件状态
-            if os.path.exists("测试.md"):
-                st.markdown('<div class="status-box info-box">📄 本地测试.md文件已加载</div>', unsafe_allow_html=True)
         else:
-            st.markdown('<div class="status-box warning-box">⚠️ 知识库为空<br>请检查测试.md文件或上传新文档</div>', unsafe_allow_html=True)
+            return {
+                "context": "没有找到相关的上下文信息。",
+                "question": inputs["question"],
+                "chat_history": inputs["chat_history"]
+            }
+    
+    chain = (
+        get_context_and_question
+        | prompt
+        | llm
+        | StrOutputParser()
+    )
+    
+    return chain
+
+# ---------- 5. 侧边栏功能 ----------
+def setup_sidebar():
+    with st.sidebar:
+        st.markdown("### 📁 文件上传")
         
-        st.markdown("---")
-        
-        # 文件上传区域
-        st.subheader("📁 上传文档")
+        # 文件上传器
         uploaded_files = st.file_uploader(
-            "选择文件", 
-            type=['txt', 'md', 'pdf', 'docx', 'doc', 'csv'],
+            "上传文档文件",
+            type=['txt', 'md', 'pdf', 'docx', 'doc'],
             accept_multiple_files=True,
-            help="支持多种格式：TXT, MD, PDF, DOCX, CSV"
+            help="支持的格式：TXT, MD, PDF, DOCX, DOC"
         )
         
         if uploaded_files:
-            if st.button("🚀 添加到知识库", use_container_width=True):
-                with st.spinner("正在处理文档..."):
-                    all_documents = []
-                    
-                    for uploaded_file in uploaded_files:
-                        # 保存上传的文件到临时目录
-                        with tempfile.NamedTemporaryFile(delete=False, suffix=f".{uploaded_file.name.split('.')[-1]}") as tmp_file:
-                            tmp_file.write(uploaded_file.getvalue())
-                            tmp_file_path = tmp_file.name
+            if 'uploaded_docs' not in st.session_state:
+                st.session_state.uploaded_docs = []
+            
+            new_docs = []
+            for uploaded_file in uploaded_files:
+                if uploaded_file.name not in [doc['name'] for doc in st.session_state.get('uploaded_files_info', [])]:
+                    content = process_uploaded_file(uploaded_file)
+                    if content:
+                        new_docs.append(content)
                         
-                        # 加载文档
-                        file_type = uploaded_file.name.split('.')[-1]
-                        documents = rag_system.load_document(tmp_file_path, file_type)
-                        
-                        if documents:
-                            # 添加文件名到元数据
-                            for doc in documents:
-                                doc.metadata["filename"] = uploaded_file.name
-                            all_documents.extend(documents)
-                            st.success(f"✅ {uploaded_file.name} 加载成功")
-                        else:
-                            st.error(f"❌ {uploaded_file.name} 加载失败")
-                        
-                        # 删除临时文件
-                        os.unlink(tmp_file_path)
-                    
-                    if all_documents:
-                        # 切分文档
-                        split_docs = rag_system.split_documents(all_documents)
-                        # 更新向量存储
-                        rag_system.create_or_update_vectorstore(split_docs)
-                        st.rerun()
+                        # 保存文件信息
+                        if 'uploaded_files_info' not in st.session_state:
+                            st.session_state.uploaded_files_info = []
+                        st.session_state.uploaded_files_info.append({
+                            'name': uploaded_file.name,
+                            'size': uploaded_file.size
+                        })
+            
+            if new_docs:
+                st.session_state.uploaded_docs.extend(new_docs)
+                # 重新构建chain
+                st.session_state.chain = get_qa_chain_with_memory()
+                st.success(f"成功上传 {len(new_docs)} 个文件！")
+        
+        # 显示已上传的文件
+        if 'uploaded_files_info' in st.session_state and st.session_state.uploaded_files_info:
+            st.markdown("### 📋 已上传文件")
+            for file_info in st.session_state.uploaded_files_info:
+                st.text(f"📄 {file_info['name']}")
+                st.text(f"   大小: {file_info['size']} bytes")
         
         st.markdown("---")
         
-        # 清除和重载功能
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("🔄 重载测试.md", use_container_width=True):
-                if os.path.exists("测试.md"):
-                    # 重新初始化系统并加载本地文件
-                    st.session_state.rag_system = EnhancedRAGSystem()
-                    st.success("测试.md文件已重新加载")
-                    st.rerun()
-                else:
-                    st.error("测试.md文件不存在")
+        # 清除对话历史按钮
+        if st.button("🗑️ 清除对话历史", use_container_width=True):
+            st.session_state.messages = []
+            st.session_state.chat_history = []
+            st.rerun()
         
-        with col2:
-            if st.button("🗑️ 清空知识库", use_container_width=True):
-                st.session_state.rag_system.vectorstore = None
-                st.success("知识库已清空")
-                st.rerun()
+        # 清除上传文件按钮
+        if st.button("📁 清除上传文件", use_container_width=True):
+            if 'uploaded_docs' in st.session_state:
+                del st.session_state.uploaded_docs
+            if 'uploaded_files_info' in st.session_state:
+                del st.session_state.uploaded_files_info
+            st.session_state.chain = get_qa_chain_with_memory()
+            st.success("已清除所有上传文件！")
+            st.rerun()
         
-        col3, col4 = st.columns(2)
-        with col3:
-            if st.button("💭 清除记忆", use_container_width=True):
-                st.session_state.rag_system.memory.clear()
-                st.session_state.messages = []
-                st.success("对话记忆已清除")
-                st.rerun()
-        
-        with col4:
-            if st.button("🔄 完全重置", use_container_width=True):
-                st.session_state.rag_system = EnhancedRAGSystem()
-                st.session_state.messages = []
-                st.success("系统已完全重置")
-                st.rerun()
+        st.markdown("---")
         
         # 使用说明
-        st.markdown("---")
-        st.subheader("📖 使用说明")
-        st.markdown("""
-        **功能特点：**
-        - 🔍 智能检索：从知识库中查找相关信息
-        - 🧠 自主回答：知识库无答案时使用AI自身知识
-        - 💭 上下文记忆：保持对话连贯性
-        - 📄 本地文件：自动加载测试.md文件
-        - 📁 多格式支持：TXT、PDF、Word、CSV等
-        - ⚡ 增量更新：随时添加新文档
-        
-        **使用步骤：**
-        1. 系统会自动加载本地的测试.md文件
-        2. 可以上传更多文档扩展知识库
-        3. 开始提问，系统会智能匹配答案
-        4. 支持连续对话和追问
-        
-        **文件管理：**
-        - 🔄 重载测试.md：重新加载本地文件
-        - 📁 上传文档：增加新的知识内容
-        - 🗑️ 清空知识库：移除所有文档
-        - 🔄 完全重置：恢复到初始状态
-        """)
+        with st.expander("📖 使用说明"):
+            st.markdown("""
+            **功能特点：**
+            - 🔍 智能检索：从知识库中查找相关信息
+            - 🧠 知识融合：找不到时使用AI自身知识回答
+            - 💭 对话记忆：记住之前的对话内容
+            - 📁 文件上传：支持多种格式文档
+            
+            **使用方法：**
+            1. 上传相关文档文件
+            2. 在下方输入框中提问
+            3. AI会结合文档和对话历史回答
+            """)
+
+# ---------- 6. Streamlit 主界面 ----------
+def main():
+    # 页面标题
+    st.markdown("""
+    <div class="main-header">
+        <h1>🦜🔗 动手学大模型应用开发 - 增强版</h1>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # 设置侧边栏
+    setup_sidebar()
+    
+    # 初始化会话状态
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+    
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = []
+    
+    if "chain" not in st.session_state:
+        st.session_state.chain = get_qa_chain_with_memory()
     
     # 主聊天区域
-    st.subheader("💬 智能问答")
+    st.markdown("### 💬 智能问答")
     
-    # 创建聊天容器
-    chat_container = st.container(height=500)
+    # 聊天消息容器
+    msgs = st.container(height=500)
     
     # 显示聊天历史
-    with chat_container:
-        for role, content in st.session_state.messages:
-            with st.chat_message(role):
-                st.write(content)
+    for role, text in st.session_state.messages:
+        with msgs.chat_message(role):
+            st.write(text)
     
-    # 聊天输入
-    if prompt := st.chat_input("请输入您的问题..."):
+    # 用户输入
+    if prompt := st.chat_input("请输入你的问题..."):
         # 添加用户消息
         st.session_state.messages.append(("user", prompt))
+        with msgs.chat_message("user"):
+            st.write(prompt)
         
-        with chat_container:
-            with st.chat_message("user"):
-                st.write(prompt)
-            
-            with st.chat_message("assistant"):
-                # 构建问答链
-                qa_chain = rag_system.build_qa_chain()
+        # 生成AI回答
+        with msgs.chat_message("assistant"):
+            try:
+                # 准备输入数据，包含对话历史
+                chain_input = {
+                    "question": prompt,
+                    "chat_history": st.session_state.chat_history
+                }
                 
-                if qa_chain is not None:
-                    # 流式输出响应
-                    with st.spinner("思考中..."):
-                        try:
-                            response = qa_chain.invoke({"question": prompt})
-                            st.write(response)
-                            
-                            # 添加到记忆和聊天历史
-                            rag_system.add_to_memory(prompt, response)
-                            st.session_state.messages.append(("assistant", response))
-                            
-                        except Exception as e:
-                            error_msg = f"抱歉，处理您的问题时出现了错误：{str(e)}"
-                            st.error(error_msg)
-                            st.session_state.messages.append(("assistant", error_msg))
-                else:
-                    # 没有知识库时使用纯LLM回答
-                    no_kb_msg = "知识库为空，让我用自己的知识来回答您的问题："
-                    st.info(no_kb_msg)
+                # 流式输出回答
+                response = st.write_stream(st.session_state.chain.stream(chain_input))
+                
+                # 保存消息到历史记录
+                st.session_state.messages.append(("assistant", response))
+                
+                # 更新对话历史（用于记忆功能）
+                st.session_state.chat_history.extend([
+                    HumanMessage(content=prompt),
+                    AIMessage(content=response)
+                ])
+                
+                # 限制对话历史长度，避免token过多
+                if len(st.session_state.chat_history) > 20:
+                    st.session_state.chat_history = st.session_state.chat_history[-20:]
                     
-                    try:
-                        llm = ChatOpenAI(
-                            model_name="gpt-4o", 
-                            temperature=0.3, 
-                            openai_api_key=os.getenv("OPENAI_API_KEY")
-                        )
-                        
-                        # 格式化历史对话
-                        history_context = ""
-                        if st.session_state.messages:
-                            recent_messages = st.session_state.messages[-6:]  # 最近3轮对话
-                            history_context = "\n".join([f"{'用户' if role == 'user' else '助手'}: {content}" for role, content in recent_messages])
-                        
-                        enhanced_prompt = f"""基于以下对话历史，请回答用户的最新问题：
-
-对话历史：
-{history_context}
-
-最新问题：{prompt}
-
-请提供准确、有用的回答。"""
-                        
-                        response = llm.invoke(enhanced_prompt).content
-                        st.write(response)
-                        
-                        # 添加到记忆和聊天历史
-                        rag_system.add_to_memory(prompt, response)
-                        st.session_state.messages.append(("assistant", response))
-                        
-                    except Exception as e:
-                        error_msg = f"抱歉，处理您的问题时出现了错误：{str(e)}"
-                        st.error(error_msg)
-                        st.session_state.messages.append(("assistant", error_msg))
-
-    # 页面底部信息
+            except Exception as e:
+                st.error(f"生成回答时出错: {e}")
+                st.session_state.messages.append(("assistant", "抱歉，生成回答时出现了错误。"))
+    
+    # 底部信息
     st.markdown("---")
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.markdown("📄 **本地文件**：自动加载测试.md文件")
+        st.metric("对话轮数", len(st.session_state.messages) // 2)
     with col2:
-        st.markdown("🔄 **记忆功能**：系统会记住对话上下文")
+        uploaded_count = len(st.session_state.get('uploaded_files_info', []))
+        st.metric("已上传文件", uploaded_count)
     with col3:
-        st.markdown("🤖 **智能回答**：知识库+AI自身知识")
+        memory_count = len(st.session_state.chat_history) // 2
+        st.metric("记忆对话数", memory_count)
 
 if __name__ == "__main__":
     main()
