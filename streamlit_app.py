@@ -87,29 +87,35 @@ st.markdown("""
         font-size: 0.8rem;
         margin-left: 0.5rem;
     }
+    /* 让复制按钮样式与Streamlit按钮保持一致 */
     .copy-button {
-        background: #f8f9fa;
-        border: 1px solid #dee2e6;
-        border-radius: 4px;
-        padding: 4px 8px;
-        cursor: pointer;
-        font-size: 12px;
-        color: #495057;
-        transition: all 0.2s;
-        display: inline-flex;
-        align-items: center;
-        gap: 2px;
-        height: 28px;
-        min-width: 32px;
+        background-color: rgb(255, 255, 255) !important;
+        border: none !important;
+        border-radius: 0.5rem !important;
+        color: rgb(49, 51, 63) !important;
+        padding: 0.25rem 0.75rem !important;
+        font-size: 0.875rem !important;
+        font-weight: 400 !important;
+        height: 38px !important;
+        min-height: 38px !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        cursor: pointer !important;
+        transition: all 0.2s !important;
+        text-decoration: none !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
     }
+    
     .copy-button:hover {
-        background: #e9ecef;
-        border-color: #adb5bd;
+        color: rgb(255, 75, 75) !important;
+        background-color: rgb(255, 255, 255) !important;
     }
+    
     .copy-button.copied {
-        background: #d4edda;
-        border-color: #c3e6cb;
-        color: #155724;
+        background-color: rgb(19, 23, 32) !important;
+        color: rgb(255, 255, 255) !important;
     }
     /* 新增：消息按钮容器样式 */
     .stButton > button {
