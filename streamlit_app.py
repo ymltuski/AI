@@ -14,6 +14,7 @@ import PyPDF2
 import io
 import time
 import json
+import uuid
 
 # 页面配置
 st.set_page_config(
@@ -62,106 +63,34 @@ st.markdown("""
         margin-top: 10px;
         margin-bottom: 10px;
         align-items: center;
+        flex-wrap: wrap;
     }
     
-    /* 统一的按钮样式 */
-    .action-button {
-        background: #f8f9fa;
-        border: 1px solid #dee2e6;
-        border-radius: 6px;
-        padding: 6px 12px;
-        cursor: pointer;
-        font-size: 14px;
-        color: #495057;
-        transition: all 0.2s ease;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 4px;
-        min-width: 80px;
-        text-decoration: none;
-        font-family: inherit;
-    }
-    
-    .action-button:hover {
-        background: #e9ecef;
-        border-color: #adb5bd;
-        transform: translateY(-1px);
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    }
-    
-    /* 复制按钮样式 */
-    .copy-button {
-        background: #007bff;
-        color: white;
-        border-color: #007bff;
-    }
-    
-    .copy-button:hover {
-        background: #0056b3;
-        border-color: #0056b3;
-        color: white;
-    }
-    
-    .copy-button.copied {
-        background: #28a745;
-        border-color: #28a745;
-        color: white;
-    }
-    
-    /* 点赞按钮样式 */
-    .like-button {
-        color: #6c757d;
-    }
-    
-    .like-button:hover {
-        color: #28a745;
-        border-color: #28a745;
-    }
-    
-    .like-button.liked {
-        background: #d4edda;
-        color: #155724;
-        border-color: #c3e6cb;
-    }
-    
-    /* 踩按钮样式 */
-    .dislike-button {
-        color: #6c757d;
-    }
-    
-    .dislike-button:hover {
-        color: #dc3545;
-        border-color: #dc3545;
-    }
-    
-    .dislike-button.disliked {
-        background: #f8d7da;
-        color: #721c24;
-        border-color: #f5c6cb;
-    }
-    
-    /* 重新生成按钮样式 */
-    .regenerate-button {
-        color: #6c757d;
-    }
-    
-    .regenerate-button:hover {
-        color: #17a2b8;
-        border-color: #17a2b8;
-    }
-    
-    /* 状态提示样式 */
-    .status-message {
+    /* 评分显示样式 */
+    .rating-display {
+        padding: 4px 8px;
+        border-radius: 4px;
         font-size: 12px;
-        color: #28a745;
-        margin-left: 8px;
-        display: none;
-        align-items: center;
+        font-weight: bold;
     }
     
-    .status-message.show {
-        display: inline-flex;
+    .rating-liked {
+        background-color: #d4edda;
+        color: #155724;
+        border: 1px solid #c3e6cb;
+    }
+    
+    .rating-disliked {
+        background-color: #f8d7da;
+        color: #721c24;
+        border: 1px solid #f5c6cb;
+    }
+    
+    /* 复制成功提示 */
+    .copy-success {
+        color: #28a745;
+        font-size: 12px;
+        margin-left: 8px;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -183,201 +112,87 @@ def initialize_session_state():
     
     if "last_question" not in st.session_state:
         st.session_state.last_question = ""
+    
+    if "copy_status" not in st.session_state:
+        st.session_state.copy_status = {}  # 存储复制状态
 
-# ---------- HTML按钮组件 ----------
-def create_message_actions_html(message_index, message_text, question=None):
-    """创建消息操作按钮组的HTML"""
-    # 转义文本中的特殊字符
-    escaped_text = message_text.replace('\\', '\\\\').replace('`', '\\`').replace("'", "\\'").replace('"', '\\"').replace('\n', '\\n').replace('\r', '\\r')
+# ---------- 消息操作功能 ----------
+def create_message_actions(message_index, message_text, question=None):
+    """创建消息操作按钮组"""
+    col1, col2, col3, col4, col5 = st.columns([1, 1, 1, 1.5, 2])
     
-    # 获取当前评分状态
-    current_rating = st.session_state.message_ratings.get(message_index, None)
-    like_class = "liked" if current_rating == "like" else ""
-    dislike_class = "disliked" if current_rating == "dislike" else ""
-    
-    # 构建按钮组HTML
-    buttons_html = f'''
-    <div class="message-actions">
-        <!-- 复制按钮 -->
-        <button id="copy-btn-{message_index}" class="action-button copy-button" onclick="copyMessage{message_index}()">
-            📋 复制
-        </button>
-        
-        <!-- 点赞按钮 -->
-        <button id="like-btn-{message_index}" class="action-button like-button {like_class}" onclick="likeMessage{message_index}()">
-            👍 点赞
-        </button>
-        
-        <!-- 踩按钮 -->
-        <button id="dislike-btn-{message_index}" class="action-button dislike-button {dislike_class}" onclick="dislikeMessage{message_index}()">
-            👎 踩
-        </button>
-        
-        <!-- 重新生成按钮（仅对AI回答显示） -->
-        {"" if question is None else f'''
-        <button id="regen-btn-{message_index}" class="action-button regenerate-button" onclick="regenerateMessage{message_index}()">
-            🔄 重新回答
-        </button>
-        '''}
-        
-        <!-- 状态提示 -->
-        <span id="status-{message_index}" class="status-message"></span>
-    </div>
-    
-    <script>
-    // 复制功能
-    function copyMessage{message_index}() {{
-        const text = `{escaped_text}`;
-        const button = document.getElementById('copy-btn-{message_index}');
-        const status = document.getElementById('status-{message_index}');
-        
-        if (navigator.clipboard && window.isSecureContext) {{
-            navigator.clipboard.writeText(text).then(function() {{
-                showCopySuccess{message_index}(button, status);
+    with col1:
+        # 复制按钮
+        copy_key = f"copy_{message_index}"
+        if st.button("📋 复制", key=copy_key, help="复制此回答"):
+            # 使用JavaScript复制到剪贴板
+            copy_js = f"""
+            <script>
+            navigator.clipboard.writeText(`{message_text.replace('`', '\\`').replace('"', '\\"').replace('\\n', '\\\\n')}`).then(function() {{
+                console.log('复制成功');
             }}).catch(function(err) {{
-                fallbackCopy{message_index}(text, button, status);
+                console.error('复制失败:', err);
             }});
-        }} else {{
-            fallbackCopy{message_index}(text, button, status);
-        }}
-    }}
+            </script>
+            """
+            st.components.v1.html(copy_js, height=0)
+            st.session_state.copy_status[message_index] = time.time()
+            st.success("✅ 已复制到剪贴板", icon="📋")
     
-    function fallbackCopy{message_index}(text, button, status) {{
-        const textArea = document.createElement('textarea');
-        textArea.value = text;
-        textArea.style.position = 'fixed';
-        textArea.style.left = '-999999px';
-        textArea.style.top = '-999999px';
-        document.body.appendChild(textArea);
-        textArea.focus();
-        textArea.select();
+    with col2:
+        # 点赞按钮
+        like_key = f"like_{message_index}"
+        current_rating = st.session_state.message_ratings.get(message_index, None)
+        like_emoji = "👍" if current_rating != "like" else "✅"
+        like_label = "点赞" if current_rating != "like" else "已赞"
         
-        try {{
-            const successful = document.execCommand('copy');
-            if (successful) {{
-                showCopySuccess{message_index}(button, status);
-            }} else {{
-                showError{message_index}(button, '复制失败');
-            }}
-        }} catch (err) {{
-            showError{message_index}(button, '复制失败');
-        }}
+        if st.button(f"{like_emoji} {like_label}", key=like_key, help="为此回答点赞"):
+            if current_rating == "like":
+                # 取消点赞
+                del st.session_state.message_ratings[message_index]
+                st.info("已取消点赞")
+            else:
+                # 点赞
+                st.session_state.message_ratings[message_index] = "like"
+                st.success("👍 已点赞")
+            st.rerun()
+    
+    with col3:
+        # 踩按钮
+        dislike_key = f"dislike_{message_index}"
+        dislike_emoji = "👎" if current_rating != "dislike" else "❌"
+        dislike_label = "踩" if current_rating != "dislike" else "已踩"
         
-        document.body.removeChild(textArea);
-    }}
+        if st.button(f"{dislike_emoji} {dislike_label}", key=dislike_key, help="为此回答踩"):
+            if current_rating == "dislike":
+                # 取消踩
+                del st.session_state.message_ratings[message_index]
+                st.info("已取消踩")
+            else:
+                # 踩
+                st.session_state.message_ratings[message_index] = "dislike"
+                st.warning("👎 已踩")
+            st.rerun()
     
-    function showCopySuccess{message_index}(button, status) {{
-        button.classList.add('copied');
-        button.innerHTML = '✅ 已复制';
-        
-        setTimeout(function() {{
-            button.classList.remove('copied');
-            button.innerHTML = '📋 复制';
-        }}, 2000);
-    }}
+    with col4:
+        # 重新生成按钮（仅对AI回答显示）
+        if question is not None:
+            regen_key = f"regen_{message_index}"
+            if st.button("🔄 重新回答", key=regen_key, help="重新生成此回答"):
+                # 设置重新生成状态
+                st.session_state.regenerating = True
+                st.session_state.last_question = question
+                st.session_state.regen_message_index = message_index
+                st.info("🔄 正在重新生成回答...")
+                st.rerun()
     
-    function showError{message_index}(button, message) {{
-        button.innerHTML = '❌ ' + message;
-        setTimeout(function() {{
-            button.innerHTML = '📋 复制';
-        }}, 2000);
-    }}
-    
-    // 点赞功能
-    function likeMessage{message_index}() {{
-        // 通过Streamlit的方式触发Python函数
-        const event = new CustomEvent('streamlit:likeMessage', {{
-            detail: {{
-                messageIndex: {message_index},
-                action: 'like'
-            }}
-        }});
-        window.dispatchEvent(event);
-        
-        // 更新UI状态
-        const likeBtn = document.getElementById('like-btn-{message_index}');
-        const dislikeBtn = document.getElementById('dislike-btn-{message_index}');
-        
-        if (likeBtn.classList.contains('liked')) {{
-            likeBtn.classList.remove('liked');
-        }} else {{
-            likeBtn.classList.add('liked');
-            dislikeBtn.classList.remove('disliked');
-        }}
-    }}
-    
-    // 踩功能
-    function dislikeMessage{message_index}() {{
-        const event = new CustomEvent('streamlit:dislikeMessage', {{
-            detail: {{
-                messageIndex: {message_index},
-                action: 'dislike'
-            }}
-        }});
-        window.dispatchEvent(event);
-        
-        // 更新UI状态
-        const likeBtn = document.getElementById('like-btn-{message_index}');
-        const dislikeBtn = document.getElementById('dislike-btn-{message_index}');
-        
-        if (dislikeBtn.classList.contains('disliked')) {{
-            dislikeBtn.classList.remove('disliked');
-        }} else {{
-            dislikeBtn.classList.add('disliked');
-            likeBtn.classList.remove('liked');
-        }}
-    }}
-    
-    {"" if question is None else f'''
-    // 重新生成功能
-    function regenerateMessage{message_index}() {{
-        const event = new CustomEvent('streamlit:regenerateMessage', {{
-            detail: {{
-                messageIndex: {message_index},
-                question: `{question.replace('`', '\\`').replace("'", "\\'").replace('"', '\\"') if question else ""}`
-            }}
-        }});
-        window.dispatchEvent(event);
-        
-        // 显示加载状态
-        const button = document.getElementById('regen-btn-{message_index}');
-        button.innerHTML = '⏳ 生成中...';
-        button.disabled = true;
-    }}
-    '''}
-    </script>
-    '''
-    
-    return buttons_html
-
-# ---------- 消息评分功能 ----------
-def handle_message_rating(message_index, rating):
-    """处理消息评分"""
-    current_rating = st.session_state.message_ratings.get(message_index, None)
-    
-    if current_rating == rating:
-        # 如果已经是相同评分，则取消评分
-        del st.session_state.message_ratings[message_index]
-    else:
-        # 设置新评分
-        st.session_state.message_ratings[message_index] = rating
-    
-    # 这里可以添加日志记录或数据收集逻辑
-    print(f"Message {message_index} rated: {st.session_state.message_ratings.get(message_index, 'none')}")
-
-# ---------- 重新生成回答功能 ----------
-def regenerate_answer(question):
-    """重新生成回答"""
-    st.session_state.regenerating = True
-    st.session_state.last_question = question
-    
-    # 移除最后一条AI回答
-    if st.session_state.messages and st.session_state.messages[-1][0] == "assistant":
-        st.session_state.messages.pop()
-        
-    # 移除对话历史中的最后一条AI消息
-    if st.session_state.chat_history and isinstance(st.session_state.chat_history[-1], AIMessage):
-        st.session_state.chat_history.pop()
+    with col5:
+        # 显示评分状态
+        if current_rating:
+            if current_rating == "like":
+                st.markdown('<span class="rating-display rating-liked">👍 已点赞</span>', unsafe_allow_html=True)
+            elif current_rating == "dislike":
+                st.markdown('<span class="rating-display rating-disliked">👎 已踩</span>', unsafe_allow_html=True)
 
 # ---------- 从本地 Markdown 文件获取文档内容 ----------
 def fetch_document_from_file(file_path):
@@ -632,6 +447,7 @@ def setup_sidebar():
             st.session_state.messages = []
             st.session_state.chat_history = []
             st.session_state.message_ratings = {}
+            st.session_state.copy_status = {}
             st.success("对话历史已清除！")
             st.rerun()
         
@@ -673,55 +489,10 @@ def setup_sidebar():
             - 复制功能支持现代浏览器的一键复制
             """)
 
-# ---------- 处理JavaScript事件 ----------
-def handle_javascript_events():
-    """处理来自JavaScript的事件"""
-    # 这里使用查询参数来模拟JavaScript事件处理
-    # 在实际应用中，可能需要使用更复杂的方式来处理JavaScript和Python之间的通信
-    
-    query_params = st.query_params
-    
-    # 处理点赞事件
-    if 'like_msg' in query_params:
-        try:
-            message_index = int(query_params['like_msg'])
-            handle_message_rating(message_index, 'like')
-            # 清除查询参数
-            del st.query_params['like_msg']
-            st.rerun()
-        except:
-            pass
-    
-    # 处理踩事件
-    if 'dislike_msg' in query_params:
-        try:
-            message_index = int(query_params['dislike_msg'])
-            handle_message_rating(message_index, 'dislike')
-            # 清除查询参数
-            del st.query_params['dislike_msg']
-            st.rerun()
-        except:
-            pass
-    
-    # 处理重新生成事件
-    if 'regen_msg' in query_params and 'regen_question' in query_params:
-        try:
-            question = query_params['regen_question']
-            regenerate_answer(question)
-            # 清除查询参数
-            del st.query_params['regen_msg']
-            del st.query_params['regen_question']
-            st.rerun()
-        except:
-            pass
-
 # ---------- Streamlit 主界面 ----------
 def main():
     # 初始化会话状态
     initialize_session_state()
-    
-    # 处理JavaScript事件
-    handle_javascript_events()
     
     # 页面标题
     st.markdown("""
@@ -743,35 +514,29 @@ def main():
     # 聊天消息容器
     msgs = st.container(height=500)
     
-    # 显示聊天历史
-    for i, (role, text) in enumerate(st.session_state.messages):
-        with msgs.chat_message(role):
-            st.write(text)
-            
-            # 为AI回答添加HTML按钮组
-            if role == "assistant":
-                # 寻找对应的用户问题
-                question = None
-                if i > 0 and st.session_state.messages[i-1][0] == "user":
-                    question = st.session_state.messages[i-1][1]
-                
-                # 渲染HTML按钮组
-                buttons_html = create_message_actions_html(i, text, question)
-                st.components.v1.html(buttons_html, height=60)
-    
     # 处理重新生成回答
     if st.session_state.regenerating:
-        with msgs.chat_message("assistant"):
-            try:
-                # 准备输入数据
-                chain_input = {
-                    "question": st.session_state.last_question,
-                    "chat_history": st.session_state.chat_history
-                }
-                
-                # 显示处理状态
-                with st.spinner("正在重新生成回答..."):
-                    # 流式输出回答
+        try:
+            # 获取要重新生成的消息索引
+            regen_index = getattr(st.session_state, 'regen_message_index', len(st.session_state.messages) - 1)
+            
+            # 移除从指定索引开始的所有消息
+            if regen_index < len(st.session_state.messages):
+                st.session_state.messages = st.session_state.messages[:regen_index]
+            
+            # 移除对话历史中的对应AI消息
+            if st.session_state.chat_history and isinstance(st.session_state.chat_history[-1], AIMessage):
+                st.session_state.chat_history.pop()
+            
+            # 准备输入数据
+            chain_input = {
+                "question": st.session_state.last_question,
+                "chat_history": st.session_state.chat_history
+            }
+            
+            # 生成新回答
+            with msgs.chat_message("assistant"):
+                with st.spinner("🔄 正在重新生成回答..."):
                     response = st.write_stream(st.session_state.chain.stream(chain_input))
                 
                 # 保存新消息到历史记录
@@ -780,21 +545,38 @@ def main():
                 # 更新对话历史
                 st.session_state.chat_history.append(AIMessage(content=response))
                 
-                # 为新回答添加HTML按钮组
-                new_message_index = len(st.session_state.messages) - 1
-                buttons_html = create_message_actions_html(new_message_index, response, st.session_state.last_question)
-                st.components.v1.html(buttons_html, height=60)
+                # 为新回答添加操作按钮
+                create_message_actions(len(st.session_state.messages) - 1, response, st.session_state.last_question)
+            
+            # 重置重新生成状态
+            st.session_state.regenerating = False
+            st.session_state.last_question = ""
+            if hasattr(st.session_state, 'regen_message_index'):
+                delattr(st.session_state, 'regen_message_index')
+            
+            st.success("✅ 重新生成完成！")
+            
+        except Exception as e:
+            error_msg = f"重新生成回答时出错: {str(e)}"
+            st.error(error_msg)
+            st.session_state.messages.append(("assistant", "抱歉，重新生成回答时出现了错误。"))
+            st.session_state.regenerating = False
+            st.rerun()
+    
+    # 显示聊天历史
+    for i, (role, text) in enumerate(st.session_state.messages):
+        with msgs.chat_message(role):
+            st.write(text)
+            
+            # 为AI回答添加操作按钮
+            if role == "assistant":
+                # 寻找对应的用户问题
+                question = None
+                if i > 0 and st.session_state.messages[i-1][0] == "user":
+                    question = st.session_state.messages[i-1][1]
                 
-                # 重置重新生成状态
-                st.session_state.regenerating = False
-                st.session_state.last_question = ""
-                
-            except Exception as e:
-                error_msg = f"重新生成回答时出错: {str(e)}"
-                st.error(error_msg)
-                st.session_state.messages.append(("assistant", "抱歉，重新生成回答时出现了错误。"))
-                st.session_state.regenerating = False
-                st.rerun()
+                # 创建操作按钮组
+                create_message_actions(i, text, question)
     
     # 用户输入
     if prompt := st.chat_input("请输入你的问题..."):
@@ -830,10 +612,9 @@ def main():
                 if len(st.session_state.chat_history) > 20:
                     st.session_state.chat_history = st.session_state.chat_history[-20:]
                 
-                # 为新回答添加HTML按钮组
+                # 为新回答添加操作按钮
                 message_index = len(st.session_state.messages) - 1
-                buttons_html = create_message_actions_html(message_index, response, prompt)
-                st.components.v1.html(buttons_html, height=60)
+                create_message_actions(message_index, response, prompt)
                     
             except Exception as e:
                 error_msg = f"生成回答时出错: {str(e)}"
@@ -845,7 +626,7 @@ def main():
     
     # 底部信息
     st.markdown("---")
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
         st.metric("对话轮数", len(st.session_state.messages) // 2)
     with col2:
@@ -854,6 +635,12 @@ def main():
     with col3:
         memory_count = len(st.session_state.chat_history) // 2
         st.metric("记忆对话数", memory_count)
+    with col4:
+        # 显示评分统计
+        ratings = list(st.session_state.message_ratings.values())
+        like_count = ratings.count("like")
+        dislike_count = ratings.count("dislike")
+        st.metric("评分统计", f"👍{like_count} 👎{dislike_count}")
 
 if __name__ == "__main__":
     main()
