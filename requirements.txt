@@ -16,11 +16,4 @@ streamlit
 langchain
 langchain-openai
 langchain-community
-openai
-faiss-cpu
-streamlit==1.37.0
-requests==2.32.3
-langchain==0.2.11
-langchain-openai==0.1.17
-langchain-community==0.2.10
-faiss-cpu==1.8.0.post1
+
