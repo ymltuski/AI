@@ -15,7 +15,7 @@ import io
 
 # 页面配置
 st.set_page_config(
-    page_title="动手学大模型应用开发", 
+    page_title="重庆科技大学", 
     page_icon="🦜🔗",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -357,7 +357,7 @@ def main():
     # 页面标题
     st.markdown("""
     <div class="main-header">
-        <h1>🦜🔗 动手学大模型应用开发 - 增强版</h1>
+        <h1>🦜🔗 重庆科技大学</h1>
     </div>
     """, unsafe_allow_html=True)
     
