@@ -23,96 +23,147 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# 自定义CSS样式
+# 自定义CSS样式 - 更简洁美观的设计
 st.markdown("""
 <style>
+    /* 隐藏Streamlit默认元素 */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    
+    /* 主标题样式 */
     .main-header {
-        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-        padding: 1rem;
-        border-radius: 10px;
+        background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #ec4899 100%);
+        padding: 2rem;
+        border-radius: 20px;
         margin-bottom: 2rem;
+        box-shadow: 0 10px 30px rgba(79, 70, 229, 0.3);
+        text-align: center;
     }
     .main-header h1 {
         color: white;
-        text-align: center;
         margin: 0;
+        font-weight: 700;
+        font-size: 2.5rem;
+        text-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        letter-spacing: -0.5px;
     }
-    .upload-section {
-        border: 2px dashed #667eea;
-        border-radius: 10px;
+    
+    /* 按钮通用样式 */
+    .stButton > button {
+        border-radius: 12px !important;
+        border: none !important;
+        font-weight: 600 !important;
+        transition: all 0.3s ease !important;
+        height: 40px !important;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important;
+    }
+    
+    .stButton > button:hover {
+        transform: translateY(-2px) !important;
+        box-shadow: 0 8px 25px rgba(0,0,0,0.2) !important;
+    }
+    
+    /* 复制按钮样式 */
+    .stButton > button:first-child {
+        background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+        color: white !important;
+    }
+    
+    /* 点赞按钮样式 */
+    .stButton > button:nth-child(1) {
+        background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important;
+        color: white !important;
+    }
+    
+    /* 聊天消息样式优化 */
+    .stChatMessage {
+        border-radius: 18px !important;
+        margin: 1rem 0 !important;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.08) !important;
+        border: 1px solid rgba(255,255,255,0.1) !important;
+    }
+    
+    /* 用户消息 */
+    [data-testid="user-chat-message"] {
+        background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%) !important;
+        border-left: 4px solid #3b82f6 !important;
+    }
+    
+    /* AI消息 */
+    [data-testid="assistant-chat-message"] {
+        background: linear-gradient(135deg, #f3e8ff 0%, #e9d5ff 100%) !important;
+        border-left: 4px solid #8b5cf6 !important;
+    }
+    
+    /* 输入框样式 */
+    .stChatInputContainer {
+        border-radius: 20px !important;
+        border: 2px solid #e5e7eb !important;
+        background: white !important;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.05) !important;
+    }
+    
+    .stChatInputContainer:focus-within {
+        border-color: #4f46e5 !important;
+        box-shadow: 0 4px 20px rgba(79, 70, 229, 0.15) !important;
+    }
+    
+    /* 侧边栏样式 */
+    .css-1d391kg {
+        background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+    }
+    
+    /* 指标卡片 */
+    [data-testid="metric-container"] {
+        background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+        border: 1px solid #e2e8f0;
         padding: 1rem;
-        margin: 1rem 0;
+        border-radius: 12px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     }
-    .chat-container {
-        border-radius: 10px;
-        border: 1px solid #e0e0e0;
-        padding: 1rem;
+    
+    /* Toast消息样式 */
+    .stToast {
+        border-radius: 12px !important;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.15) !important;
     }
-    .sidebar-info {
-        background-color: #f0f2f6;
-        padding: 1rem;
-        border-radius: 10px;
-        margin-bottom: 1rem;
-    }
-    .message-actions {
-        display: flex;
-        gap: 8px;
-        margin-top: 8px;
-        align-items: center;
-    }
-    .action-button {
+    
+    /* 分隔线样式 */
+    hr {
         border: none;
-        background: none;
-        cursor: pointer;
-        padding: 4px 8px;
+        height: 1px;
+        background: linear-gradient(90deg, transparent, #e2e8f0, transparent);
+        margin: 2rem 0;
+    }
+    
+    /* 滚动条美化 */
+    ::-webkit-scrollbar {
+        width: 8px;
+    }
+    ::-webkit-scrollbar-track {
+        background: #f1f5f9;
         border-radius: 4px;
-        font-size: 14px;
-        transition: background-color 0.2s;
     }
-    .action-button:hover {
-        background-color: #f0f0f0;
-    }
-    .copy-success {
-        color: #28a745;
-        font-size: 12px;
-        margin-left: 8px;
-    }
-    .feedback-buttons {
-        display: flex;
-        gap: 4px;
-    }
-    .like-button, .dislike-button {
-        border: none;
-        background: none;
-        cursor: pointer;
-        padding: 4px;
+    ::-webkit-scrollbar-thumb {
+        background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
         border-radius: 4px;
-        font-size: 16px;
-        transition: all 0.2s;
     }
-    .like-button:hover {
-        background-color: #e8f5e8;
+    ::-webkit-scrollbar-thumb:hover {
+        background: linear-gradient(135deg, #4338ca 0%, #6d28d9 100%);
     }
-    .dislike-button:hover {
-        background-color: #ffeaea;
+    
+    /* 上传区域样式 */
+    .uploadedFile {
+        border-radius: 12px !important;
+        border: 2px dashed #4f46e5 !important;
+        background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%) !important;
     }
-    .like-button.active {
-        background-color: #d4edda;
-        color: #28a745;
-    }
-    .dislike-button.active {
-        background-color: #f8d7da;
-        color: #dc3545;
-    }
-    .regenerate-button {
-        color: #6c757d;
-        text-decoration: none;
-        font-size: 12px;
-        margin-left: 8px;
-    }
-    .regenerate-button:hover {
-        color: #007bff;
-        text-decoration: underline;
+    
+    /* Expander样式 */
+    .streamlit-expanderHeader {
+        border-radius: 8px !important;
+        background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%) !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -277,45 +328,62 @@ def get_qa_chain_with_memory():
     return chain
 
 # ---------- 5. 交互功能函数 ----------
-def copy_to_clipboard_js(text, button_id):
+def copy_to_clipboard_js(text):
     """生成复制到剪贴板的JavaScript代码"""
-    # 转义文本中的特殊字符
-    escaped_text = text.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "\\n").replace("\r", "\\r")
+    import json
+    # 使用JSON编码来正确处理特殊字符
+    escaped_text = json.dumps(text, ensure_ascii=False)
     
     js_code = f"""
     <script>
-    function copyToClipboard_{button_id}() {{
-        const text = '{escaped_text}';
+    function copyToClipboard() {{
+        const text = {escaped_text};
         navigator.clipboard.writeText(text).then(function() {{
-            const button = document.getElementById('copy_btn_{button_id}');
-            const originalText = button.innerHTML;
-            button.innerHTML = '✅ 已复制';
-            button.style.color = '#28a745';
+            // 复制成功，显示临时提示
+            const toast = document.createElement('div');
+            toast.innerHTML = '✅ 已复制到剪贴板';
+            toast.style.cssText = 'position: fixed; top: 20px; right: 20px; background: #d4edda; color: #155724; padding: 8px 16px; border-radius: 4px; z-index: 9999; border: 1px solid #c3e6cb;';
+            document.body.appendChild(toast);
             setTimeout(function() {{
-                button.innerHTML = originalText;
-                button.style.color = '';
+                document.body.removeChild(toast);
             }}, 2000);
         }}).catch(function(err) {{
             console.error('复制失败: ', err);
             // 备用方案：创建临时文本区域
             const textArea = document.createElement('textarea');
             textArea.value = text;
+            textArea.style.position = 'fixed';
+            textArea.style.left = '-999999px';
             document.body.appendChild(textArea);
             textArea.select();
             document.execCommand('copy');
             document.body.removeChild(textArea);
             
-            const button = document.getElementById('copy_btn_{button_id}');
-            const originalText = button.innerHTML;
-            button.innerHTML = '✅ 已复制';
-            button.style.color = '#28a745';
+            // 显示成功提示
+            const toast = document.createElement('div');
+            toast.innerHTML = '✅ 已复制到剪贴板';
+            toast.style.cssText = 'position: fixed; top: 20px; right: 20px; background: #d4edda; color: #155724; padding: 8px 16px; border-radius: 4px; z-index: 9999; border: 1px solid #c3e6cb;';
+            document.body.appendChild(toast);
             setTimeout(function() {{
-                button.innerHTML = originalText;
-                button.style.color = '';
+                document.body.removeChild(toast);
             }}, 2000);
         }});
     }}
     </script>
+    <button onclick="copyToClipboard()" style="
+        border: none; 
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+        color: white; 
+        padding: 6px 12px; 
+        border-radius: 6px; 
+        cursor: pointer; 
+        font-size: 12px;
+        transition: all 0.2s ease;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    " onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 4px 8px rgba(0,0,0,0.15)'" 
+       onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 4px rgba(0,0,0,0.1)'">
+        📋 复制
+    </button>
     """
     return js_code
 
@@ -328,58 +396,50 @@ def render_message_actions(message_id, message_text, is_assistant=True):
     if 'message_feedback' not in st.session_state:
         st.session_state.message_feedback = {}
     
-    col1, col2, col3, col4 = st.columns([1, 1, 1, 6])
+    # 创建一个更美观的按钮布局
+    st.markdown('<div style="margin: 10px 0; padding: 8px 0; border-top: 1px solid #f0f0f0;"></div>', unsafe_allow_html=True)
+    
+    col1, col2, col3, col4 = st.columns([2, 1, 1, 2])
     
     with col1:
-        # 复制按钮
-        button_id = f"copy_{message_id}"
-        if st.button("📋", key=f"copy_btn_{message_id}", help="复制回答"):
-            # 使用JavaScript复制到剪贴板
-            js_code = copy_to_clipboard_js(message_text, message_id)
-            st.components.v1.html(f"""
-            {js_code}
-            <button id="copy_btn_{message_id}" onclick="copyToClipboard_{message_id}()" 
-                    style="border: 1px solid #ddd; background: #f8f9fa; padding: 4px 8px; border-radius: 4px; cursor: pointer;">
-                📋 复制
-            </button>
-            """, height=40)
+        # 只使用一个复制按钮，不再显示HTML组件
+        if st.button("📋 复制", key=f"copy_btn_{message_id}", help="复制这个回答"):
+            # 使用streamlit的方式复制到剪贴板
+            st.write(f'<script>navigator.clipboard.writeText(`{message_text.replace("`", "\\`")}`)</script>', unsafe_allow_html=True)
+            st.toast("✅ 已复制到剪贴板！", icon="📋")
     
     with col2:
         # 点赞按钮
         current_feedback = st.session_state.message_feedback.get(message_id, None)
         like_active = current_feedback == 'like'
         
-        if st.button("👍", key=f"like_{message_id}", help="点赞"):
+        button_text = "👍" if not like_active else "💚"
+        if st.button(button_text, key=f"like_{message_id}", help="点赞这个回答"):
             if current_feedback == 'like':
                 st.session_state.message_feedback[message_id] = None
-                st.success("取消点赞")
+                st.toast("取消点赞", icon="👍")
             else:
                 st.session_state.message_feedback[message_id] = 'like'
-                st.success("已点赞 👍")
+                st.toast("已点赞！", icon="💚")
             st.rerun()
     
     with col3:
         # 踩按钮
         dislike_active = current_feedback == 'dislike'
         
-        if st.button("👎", key=f"dislike_{message_id}", help="不满意"):
+        button_text = "👎" if not dislike_active else "💔"
+        if st.button(button_text, key=f"dislike_{message_id}", help="这个回答不满意"):
             if current_feedback == 'dislike':
                 st.session_state.message_feedback[message_id] = None
-                st.info("取消不满意")
+                st.toast("取消不满意标记", icon="👎")
             else:
                 st.session_state.message_feedback[message_id] = 'dislike'
-                st.warning("已标记不满意 👎")
-                # 可以在这里收集用户反馈
-                with st.expander("💬 告诉我们如何改进"):
-                    feedback_text = st.text_area("请描述问题或建议：", key=f"feedback_{message_id}")
-                    if st.button("提交反馈", key=f"submit_feedback_{message_id}"):
-                        # 这里可以保存反馈到数据库或日志
-                        st.success("感谢您的反馈！我们会持续改进。")
+                st.toast("已标记不满意", icon="💔")
             st.rerun()
     
     with col4:
         # 重新生成按钮
-        if st.button("🔄 重新回答", key=f"regenerate_{message_id}", help="重新生成回答"):
+        if st.button("🔄 重新生成", key=f"regenerate_{message_id}", help="重新生成这个回答"):
             # 找到对应的问题
             regenerate_question = None
             for i, (role, text) in enumerate(st.session_state.messages):
@@ -395,6 +455,20 @@ def render_message_actions(message_id, message_text, is_assistant=True):
                     'original_response': message_text
                 }
                 st.rerun()
+    
+    # 如果用户点了不满意，显示反馈框
+    if current_feedback == 'dislike':
+        with st.expander("💬 请告诉我们如何改进", expanded=False):
+            feedback_text = st.text_area("请描述问题或建议：", key=f"feedback_{message_id}", height=60, placeholder="例如：回答不够详细、信息有误、语言不够友好等...")
+            if st.button("📝 提交反馈", key=f"submit_feedback_{message_id}"):
+                if feedback_text.strip():
+                    # 这里可以保存反馈到数据库或日志
+                    st.success("✨ 感谢您的宝贵反馈！我们会持续改进。")
+                else:
+                    st.warning("请输入反馈内容")
+
+# 移除不需要的复制函数
+# def copy_to_clipboard_js(text): 这个函数不再需要了
 
 # ---------- 6. 侧边栏功能 ----------
 def setup_sidebar():
@@ -616,7 +690,8 @@ def main():
     # 页面标题
     st.markdown("""
     <div class="main-header">
-        <h1>🦜🔗 动手学大模型应用开发 - 增强版</h1>
+        <h1>🚀 智能问答助手</h1>
+        <p style="color: rgba(255,255,255,0.9); margin: 0.5rem 0 0 0; font-size: 1.1rem;">基于大模型的文档问答系统</p>
     </div>
     """, unsafe_allow_html=True)
     
