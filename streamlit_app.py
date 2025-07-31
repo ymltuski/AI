@@ -109,46 +109,23 @@ st.markdown("""
         color: white;
     }
     
-    /* 点赞按钮样式 */
-    .like-button {
-        color: #6c757d;
-    }
-    
-    .like-button:hover {
-        color: #28a745;
-        border-color: #28a745;
-    }
-    
-    .like-button.liked {
-        background: #d4edda;
-        color: #155724;
-        border-color: #c3e6cb;
-    }
-    
-    /* 踩按钮样式 */
-    .dislike-button {
-        color: #6c757d;
-    }
-    
-    .dislike-button:hover {
-        color: #dc3545;
-        border-color: #dc3545;
-    }
-    
-    .dislike-button.disliked {
-        background: #f8d7da;
-        color: #721c24;
-        border-color: #f5c6cb;
-    }
-    
     /* 重新生成按钮样式 */
     .regenerate-button {
-        color: #6c757d;
+        background: #17a2b8;
+        color: white;
+        border-color: #17a2b8;
     }
     
     .regenerate-button:hover {
-        color: #17a2b8;
-        border-color: #17a2b8;
+        background: #138496;
+        border-color: #117a8b;
+        color: white;
+    }
+    
+    .regenerate-button.loading {
+        background: #ffc107;
+        border-color: #ffc107;
+        color: #212529;
     }
     
     /* 状态提示样式 */
@@ -175,14 +152,8 @@ def initialize_session_state():
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = []
     
-    if "message_ratings" not in st.session_state:
-        st.session_state.message_ratings = {}  # 存储消息评分
-    
-    if "regenerating" not in st.session_state:
-        st.session_state.regenerating = False
-    
-    if "last_question" not in st.session_state:
-        st.session_state.last_question = ""
+    if "regenerate_request" not in st.session_state:
+        st.session_state.regenerate_request = None
 
 # ---------- HTML按钮组件 ----------
 def create_message_actions_html(message_index, message_text, question=None):
@@ -190,27 +161,12 @@ def create_message_actions_html(message_index, message_text, question=None):
     # 转义文本中的特殊字符
     escaped_text = message_text.replace('\\', '\\\\').replace('`', '\\`').replace("'", "\\'").replace('"', '\\"').replace('\n', '\\n').replace('\r', '\\r')
     
-    # 获取当前评分状态
-    current_rating = st.session_state.message_ratings.get(message_index, None)
-    like_class = "liked" if current_rating == "like" else ""
-    dislike_class = "disliked" if current_rating == "dislike" else ""
-    
     # 构建按钮组HTML
     buttons_html = f'''
     <div class="message-actions">
         <!-- 复制按钮 -->
         <button id="copy-btn-{message_index}" class="action-button copy-button" onclick="copyMessage{message_index}()">
             📋 复制
-        </button>
-        
-        <!-- 点赞按钮 -->
-        <button id="like-btn-{message_index}" class="action-button like-button {like_class}" onclick="likeMessage{message_index}()">
-            👍 点赞
-        </button>
-        
-        <!-- 踩按钮 -->
-        <button id="dislike-btn-{message_index}" class="action-button dislike-button {dislike_class}" onclick="dislikeMessage{message_index}()">
-            👎 踩
         </button>
         
         <!-- 重新生成按钮（仅对AI回答显示） -->
@@ -283,66 +239,52 @@ def create_message_actions_html(message_index, message_text, question=None):
         }}, 2000);
     }}
     
-    // 点赞功能
-    function likeMessage{message_index}() {{
-        // 通过Streamlit的方式触发Python函数
-        const event = new CustomEvent('streamlit:likeMessage', {{
-            detail: {{
-                messageIndex: {message_index},
-                action: 'like'
-            }}
-        }});
-        window.dispatchEvent(event);
-        
-        // 更新UI状态
-        const likeBtn = document.getElementById('like-btn-{message_index}');
-        const dislikeBtn = document.getElementById('dislike-btn-{message_index}');
-        
-        if (likeBtn.classList.contains('liked')) {{
-            likeBtn.classList.remove('liked');
-        }} else {{
-            likeBtn.classList.add('liked');
-            dislikeBtn.classList.remove('disliked');
-        }}
-    }}
-    
-    // 踩功能
-    function dislikeMessage{message_index}() {{
-        const event = new CustomEvent('streamlit:dislikeMessage', {{
-            detail: {{
-                messageIndex: {message_index},
-                action: 'dislike'
-            }}
-        }});
-        window.dispatchEvent(event);
-        
-        // 更新UI状态
-        const likeBtn = document.getElementById('like-btn-{message_index}');
-        const dislikeBtn = document.getElementById('dislike-btn-{message_index}');
-        
-        if (dislikeBtn.classList.contains('disliked')) {{
-            dislikeBtn.classList.remove('disliked');
-        }} else {{
-            dislikeBtn.classList.add('disliked');
-            likeBtn.classList.remove('liked');
-        }}
-    }}
-    
     {"" if question is None else f'''
     // 重新生成功能
     function regenerateMessage{message_index}() {{
-        const event = new CustomEvent('streamlit:regenerateMessage', {{
-            detail: {{
-                messageIndex: {message_index},
-                question: `{question.replace('`', '\\`').replace("'", "\\'").replace('"', '\\"') if question else ""}`
-            }}
-        }});
-        window.dispatchEvent(event);
-        
-        // 显示加载状态
+        // 更新按钮状态
         const button = document.getElementById('regen-btn-{message_index}');
         button.innerHTML = '⏳ 生成中...';
+        button.classList.add('loading');
         button.disabled = true;
+        
+        // 设置重新生成请求
+        const questionText = `{question.replace('\\', '\\\\').replace('`', '\\`').replace("'", "\\'").replace('"', '\\"').replace('\n', '\\n').replace('\r', '\\r') if question else ""}`;
+        
+        // 使用 Streamlit 的方式通知 Python 后端
+        // 创建隐藏的表单提交来触发重新渲染
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.style.display = 'none';
+        
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'regenerate_question';
+        input.value = questionText;
+        
+        const messageIndexInput = document.createElement('input');
+        messageIndexInput.type = 'hidden';
+        messageIndexInput.name = 'regenerate_message_index';
+        messageIndexInput.value = '{message_index}';
+        
+        form.appendChild(input);
+        form.appendChild(messageIndexInput);
+        document.body.appendChild(form);
+        
+        // 使用 Streamlit 的 JavaScript API（如果可用）
+        if (window.streamlit) {{
+            window.streamlit.setComponentValue({{
+                action: 'regenerate',
+                question: questionText,
+                messageIndex: {message_index}
+            }});
+        }} else {{
+            // 备用方案：使用查询参数
+            const url = new URL(window.location);
+            url.searchParams.set('regenerate_question', questionText);
+            url.searchParams.set('regenerate_message_index', '{message_index}');
+            window.location = url.toString();
+        }}
     }}
     '''}
     </script>
@@ -350,34 +292,66 @@ def create_message_actions_html(message_index, message_text, question=None):
     
     return buttons_html
 
-# ---------- 消息评分功能 ----------
-def handle_message_rating(message_index, rating):
-    """处理消息评分"""
-    current_rating = st.session_state.message_ratings.get(message_index, None)
-    
-    if current_rating == rating:
-        # 如果已经是相同评分，则取消评分
-        del st.session_state.message_ratings[message_index]
-    else:
-        # 设置新评分
-        st.session_state.message_ratings[message_index] = rating
-    
-    # 这里可以添加日志记录或数据收集逻辑
-    print(f"Message {message_index} rated: {st.session_state.message_ratings.get(message_index, 'none')}")
-
 # ---------- 重新生成回答功能 ----------
-def regenerate_answer(question):
-    """重新生成回答"""
-    st.session_state.regenerating = True
-    st.session_state.last_question = question
+def handle_regenerate_request():
+    """处理重新生成请求"""
+    # 检查查询参数
+    query_params = st.query_params
     
-    # 移除最后一条AI回答
-    if st.session_state.messages and st.session_state.messages[-1][0] == "assistant":
-        st.session_state.messages.pop()
+    if 'regenerate_question' in query_params and 'regenerate_message_index' in query_params:
+        try:
+            question = query_params['regenerate_question']
+            message_index = int(query_params['regenerate_message_index'])
+            
+            # 设置重新生成请求
+            st.session_state.regenerate_request = {
+                'question': question,
+                'message_index': message_index
+            }
+            
+            # 清除查询参数
+            st.query_params.clear()
+            
+            return True
+        except Exception as e:
+            st.error(f"处理重新生成请求时出错: {e}")
+            return False
+    
+    return False
+
+def process_regenerate_request():
+    """处理重新生成回答"""
+    if st.session_state.regenerate_request is None:
+        return False
+    
+    request = st.session_state.regenerate_request
+    question = request['question']
+    message_index = request['message_index']
+    
+    try:
+        # 移除指定索引之后的所有消息（包括要重新生成的消息）
+        st.session_state.messages = st.session_state.messages[:message_index]
         
-    # 移除对话历史中的最后一条AI消息
-    if st.session_state.chat_history and isinstance(st.session_state.chat_history[-1], AIMessage):
-        st.session_state.chat_history.pop()
+        # 同样调整对话历史
+        # 计算对话历史中需要保留的消息数量
+        # 每个用户问题对应一个 HumanMessage 和一个 AIMessage
+        target_pairs = message_index // 2
+        st.session_state.chat_history = st.session_state.chat_history[:target_pairs * 2]
+        
+        # 添加用户问题（如果不存在）
+        if not st.session_state.messages or st.session_state.messages[-1][0] != "user":
+            st.session_state.messages.append(("user", question))
+            st.session_state.chat_history.append(HumanMessage(content=question))
+        
+        # 清除重新生成请求
+        st.session_state.regenerate_request = None
+        
+        return True
+        
+    except Exception as e:
+        st.error(f"处理重新生成请求时出错: {e}")
+        st.session_state.regenerate_request = None
+        return False
 
 # ---------- 从本地 Markdown 文件获取文档内容 ----------
 def fetch_document_from_file(file_path):
@@ -631,7 +605,7 @@ def setup_sidebar():
         if st.button("🗑️ 清除对话历史", use_container_width=True):
             st.session_state.messages = []
             st.session_state.chat_history = []
-            st.session_state.message_ratings = {}
+            st.session_state.regenerate_request = None
             st.success("对话历史已清除！")
             st.rerun()
         
@@ -656,72 +630,29 @@ def setup_sidebar():
             - 💭 对话记忆：记住之前的对话内容
             - 📁 文件上传：支持多种格式文档
             - 📋 一键复制：直接点击复制AI回答到剪贴板
-            - 👍👎 评分系统：对回答进行点赞或踩
             - 🔄 重新回答：不满意可重新生成回答
             
             **使用方法：**
             1. 上传相关文档文件（会自动处理并加入知识库）
             2. 在下方输入框中提问
             3. AI会结合文档内容和对话历史回答
-            4. 使用底部按钮进行复制、评分或重新生成
+            4. 使用底部按钮进行复制或重新生成
             
             **注意事项：**
             - 文件上传后会自动构建知识库
             - 大文件处理可能需要几秒钟时间
             - 支持同时上传多个文件
-            - 评分数据会用于改进服务质量
             - 复制功能支持现代浏览器的一键复制
+            - 重新回答会基于相同问题生成新答案
             """)
-
-# ---------- 处理JavaScript事件 ----------
-def handle_javascript_events():
-    """处理来自JavaScript的事件"""
-    # 这里使用查询参数来模拟JavaScript事件处理
-    # 在实际应用中，可能需要使用更复杂的方式来处理JavaScript和Python之间的通信
-    
-    query_params = st.query_params
-    
-    # 处理点赞事件
-    if 'like_msg' in query_params:
-        try:
-            message_index = int(query_params['like_msg'])
-            handle_message_rating(message_index, 'like')
-            # 清除查询参数
-            del st.query_params['like_msg']
-            st.rerun()
-        except:
-            pass
-    
-    # 处理踩事件
-    if 'dislike_msg' in query_params:
-        try:
-            message_index = int(query_params['dislike_msg'])
-            handle_message_rating(message_index, 'dislike')
-            # 清除查询参数
-            del st.query_params['dislike_msg']
-            st.rerun()
-        except:
-            pass
-    
-    # 处理重新生成事件
-    if 'regen_msg' in query_params and 'regen_question' in query_params:
-        try:
-            question = query_params['regen_question']
-            regenerate_answer(question)
-            # 清除查询参数
-            del st.query_params['regen_msg']
-            del st.query_params['regen_question']
-            st.rerun()
-        except:
-            pass
 
 # ---------- Streamlit 主界面 ----------
 def main():
     # 初始化会话状态
     initialize_session_state()
     
-    # 处理JavaScript事件
-    handle_javascript_events()
+    # 处理重新生成请求
+    regenerate_triggered = handle_regenerate_request()
     
     # 页面标题
     st.markdown("""
@@ -743,6 +674,10 @@ def main():
     # 聊天消息容器
     msgs = st.container(height=500)
     
+    # 处理重新生成请求
+    if process_regenerate_request():
+        st.rerun()
+    
     # 显示聊天历史
     for i, (role, text) in enumerate(st.session_state.messages):
         with msgs.chat_message(role):
@@ -758,43 +693,6 @@ def main():
                 # 渲染HTML按钮组
                 buttons_html = create_message_actions_html(i, text, question)
                 st.components.v1.html(buttons_html, height=60)
-    
-    # 处理重新生成回答
-    if st.session_state.regenerating:
-        with msgs.chat_message("assistant"):
-            try:
-                # 准备输入数据
-                chain_input = {
-                    "question": st.session_state.last_question,
-                    "chat_history": st.session_state.chat_history
-                }
-                
-                # 显示处理状态
-                with st.spinner("正在重新生成回答..."):
-                    # 流式输出回答
-                    response = st.write_stream(st.session_state.chain.stream(chain_input))
-                
-                # 保存新消息到历史记录
-                st.session_state.messages.append(("assistant", response))
-                
-                # 更新对话历史
-                st.session_state.chat_history.append(AIMessage(content=response))
-                
-                # 为新回答添加HTML按钮组
-                new_message_index = len(st.session_state.messages) - 1
-                buttons_html = create_message_actions_html(new_message_index, response, st.session_state.last_question)
-                st.components.v1.html(buttons_html, height=60)
-                
-                # 重置重新生成状态
-                st.session_state.regenerating = False
-                st.session_state.last_question = ""
-                
-            except Exception as e:
-                error_msg = f"重新生成回答时出错: {str(e)}"
-                st.error(error_msg)
-                st.session_state.messages.append(("assistant", "抱歉，重新生成回答时出现了错误。"))
-                st.session_state.regenerating = False
-                st.rerun()
     
     # 用户输入
     if prompt := st.chat_input("请输入你的问题..."):
