@@ -668,23 +668,24 @@ def generate_ai_response(prompt, msgs):
 def main():
     # 初始化会话状态
     initialize_session_state()
-    
-    # 页面标题（美化版）
+
+    # 美化标题（使用 emoji + 居中 + 渐变背景 + 阴影）
     st.markdown("""
     <style>
-    .custom-title {
-        font-size: 42px;
-        font-weight: 800;
+    .emoji-title {
+        font-size: 38px;
+        font-weight: bold;
         text-align: center;
-        padding: 1rem;
         color: white;
-        background: linear-gradient(to right, #667eea, #764ba2);
-        border-radius: 12px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        padding: 1.2rem 1rem;
+        background: linear-gradient(to right, #5f72bd, #9b23ea);
+        border-radius: 20px;
+        box-shadow: 0 6px 12px rgba(0,0,0,0.15);
         margin-bottom: 2rem;
+        letter-spacing: 1px;
     }
     </style>
-    <div class="custom-title">🦜🔗 重庆科技大学 · 智能问答系统</div>
+    <div class="emoji-title">🦜🔗 重庆科技大学 · 智能问答系统</div>
     """, unsafe_allow_html=True)
 
     # 设置侧边栏
@@ -703,31 +704,29 @@ def main():
     # 聊天消息容器
     msgs = st.container(height=500)
 
-    # 显示聊天历史（带头像 + 美化气泡）
+    # 聊天记录渲染（使用 emoji）
     for i, (role, text) in enumerate(st.session_state.messages):
-        avatar = "🧑" if role == "user" else "🤖"
-        bubble_color = "#f0f2f6" if role == "user" else "#e6f0ff"
+        avatar = "🧑‍🎓" if role == "user" else "🤖"
+        bubble_color = "#f9f9f9" if role == "user" else "#eef5ff"
 
         with msgs.chat_message(role, avatar=avatar):
             st.markdown(f"""
             <div style="
                 background-color: {bubble_color};
-                padding: 1rem;
-                border-radius: 12px;
-                max-width: 90%;
-                display: inline-block;
-                box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-                margin: 5px 0;
-                text-align: left;
+                padding: 1rem 1.2rem;
+                border-radius: 16px;
+                box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+                max-width: 92%;
+                line-height: 1.6;
+                font-size: 16px;
             ">
             {text}
             </div>
             """, unsafe_allow_html=True)
 
-            # 添加按钮（仅 assistant 有）
+            # AI 回答的操作按钮
             if role == "assistant":
                 question = st.session_state.messages[i-1][1] if i > 0 and st.session_state.messages[i-1][0] == "user" else None
-                st.markdown("<div style='margin-top: 8px;'>", unsafe_allow_html=True)
                 button_col1, button_col2, _ = st.columns([1, 1, 8])
                 with button_col1:
                     copy_html = create_copy_button_html(i, text)
@@ -738,7 +737,6 @@ def main():
                             st.session_state.regenerate_question = question
                             st.session_state.regenerate_index = i
                             st.rerun()
-                st.markdown("</div>", unsafe_allow_html=True)
 
     # 如果有重新生成请求
     if regenerate_question:
@@ -747,10 +745,10 @@ def main():
             generate_ai_response(regenerate_question, msgs)
         st.rerun()
 
-    # 用户输入框
+    # 用户输入
     if prompt := st.chat_input("请输入你的问题..."):
         st.session_state.messages.append(("user", prompt))
-        with msgs.chat_message("user", avatar="🧑"):
+        with msgs.chat_message("user", avatar="🧑‍🎓"):
             st.write(prompt)
         with msgs.chat_message("assistant", avatar="🤖"):
             generate_ai_response(prompt, msgs)
