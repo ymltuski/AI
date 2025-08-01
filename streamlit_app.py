@@ -196,22 +196,22 @@ def create_message_actions(message_index, message_text, question=None):
                 st.session_state.regenerate_index = message_index
                 st.rerun()
 
-# 修改后的 create_copy_button_html 函数 - 添加白色边框样式
+# 修改后的 create_copy_button_html 函数 - 添加白色边框样式并修复显示问题
 def create_copy_button_html(message_index, message_text):
     """创建带白色边框的复制按钮HTML"""
     # 转义文本中的特殊字符
     escaped_text = message_text.replace('\\', '\\\\').replace('`', '\\`').replace("'", "\\'").replace('"', '\\"').replace('\n', '\\n').replace('\r', '\\r')
 
     copy_html = f'''
-    <div style="margin: 10px 0;">
+    <div style="display: flex; align-items: center; gap: 10px; margin: 5px 0; height: 40px;">
         <button onclick="copyToClipboard{message_index}()"
                 class="copy-button"
-                style="background: white; border: 1px solid #ddd; border-radius: 6px; padding: 6px; cursor: pointer; font-size: 18px; color: #666; transition: all 0.2s ease; display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);"
+                style="background: white; border: 1px solid #ddd; border-radius: 6px; padding: 6px; cursor: pointer; font-size: 18px; color: #666; transition: all 0.2s ease; display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); flex-shrink: 0;"
                 onmouseover="this.style.background='#f8f9fa'; this.style.borderColor='#adb5bd'; this.style.color='#333'; this.style.transform='translateY(-1px)'; this.style.boxShadow='0 2px 6px rgba(0,0,0,0.15)';"
                 onmouseout="this.style.background='white'; this.style.borderColor='#ddd'; this.style.color='#666'; this.style.transform='translateY(0px)'; this.style.boxShadow='0 1px 3px rgba(0,0,0,0.1)';">
             📋
         </button>
-        <span id="copy-status-{message_index}" style="margin-left: 10px; color: #28a745; font-size: 12px;"></span>
+        <span id="copy-status-{message_index}" style="color: #28a745; font-size: 12px; line-height: 1;"></span>
     </div>
 
     <script>
@@ -222,7 +222,7 @@ def create_copy_button_html(message_index, message_text):
 
         if (navigator.clipboard && window.isSecureContext) {{
             navigator.clipboard.writeText(text).then(function() {{
-                statusElement.textContent = '✅';
+                statusElement.textContent = '✅ 已复制';
                 button.style.color = '#28a745';
                 button.style.background = '#f0f8f0';
                 button.style.borderColor = '#28a745';
@@ -253,15 +253,15 @@ def create_copy_button_html(message_index, message_text):
         try {{
             const successful = document.execCommand('copy');
             if (successful) {{
-                statusElement.textContent = '✅';
+                statusElement.textContent = '✅ 已复制';
                 button.style.color = '#28a745';
                 button.style.background = '#f0f8f0';
                 button.style.borderColor = '#28a745';
             }} else {{
-                statusElement.textContent = '❌';
+                statusElement.textContent = '❌ 复制失败';
             }}
         }} catch (err) {{
-            statusElement.textContent = '❌';
+            statusElement.textContent = '❌ 复制失败';
         }}
 
         document.body.removeChild(textArea);
@@ -639,13 +639,17 @@ def generate_ai_response(prompt, msgs):
         # 添加复制按钮和重新生成按钮
         message_index = len(st.session_state.messages) - 1
                 
-        # 使用HTML按钮组（放在左下角）
-        col1, col2 = st.columns([1, 9])
-        with col1:
+        # 使用HTML按钮组（水平排列）
+        st.markdown("---")  # 添加分隔线
+        
+        # 创建水平排列的按钮
+        button_col1, button_col2, button_col3 = st.columns([1, 1, 8])
+        
+        with button_col1:
             copy_html = create_copy_button_html(message_index, response)
-            st.components.v1.html(copy_html, height=40)
+            st.components.v1.html(copy_html, height=50)
                 
-        with col2:
+        with button_col2:
             # 重新生成按钮
             if st.button("🔄", key=f"regen_new_{message_index}", help="重新生成回答"):
                 st.session_state.regenerate_question = prompt
@@ -700,15 +704,18 @@ def main():
                 if i > 0 and st.session_state.messages[i-1][0] == "user":
                     question = st.session_state.messages[i-1][1]
                                 
-                # 创建按钮组（放在左下角）
-                col1, col2 = st.columns([1, 9])
-                                
-                with col1:
+                # 创建按钮组（水平排列）
+                st.markdown("---")  # 添加分隔线
+                
+                # 使用columns让两个按钮水平排列
+                button_col1, button_col2, button_col3 = st.columns([1, 1, 8])
+                
+                with button_col1:
                     # HTML复制按钮
                     copy_html = create_copy_button_html(i, text)
-                    st.components.v1.html(copy_html, height=40)
+                    st.components.v1.html(copy_html, height=50)
                                 
-                with col2:
+                with button_col2:
                     # 重新生成按钮
                     if question is not None:
                         if st.button("🔄", key=f"regen_history_{i}", help="重新生成回答"):
