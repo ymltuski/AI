@@ -705,7 +705,7 @@ def main():
 
     # 显示聊天历史（带头像 + 美化气泡）
     for i, (role, text) in enumerate(st.session_state.messages):
-        avatar = "🧑" if role == "user" else "🤖"
+        avatar = "🧑‍💻" if role == "user" else "🚀"
         bubble_color = "#f0f2f6" if role == "user" else "#e6f0ff"
 
         with msgs.chat_message(role, avatar=avatar):
@@ -742,7 +742,7 @@ def main():
 
     # 如果有重新生成请求
     if regenerate_question:
-        with msgs.chat_message("assistant", avatar="🤖"):
+        with msgs.chat_message("assistant", avatar="🚀"):
             st.info("🔄 正在重新生成回答...")
             generate_ai_response(regenerate_question, msgs)
         st.rerun()
@@ -750,9 +750,9 @@ def main():
     # 用户输入框
     if prompt := st.chat_input("请输入你的问题..."):
         st.session_state.messages.append(("user", prompt))
-        with msgs.chat_message("user", avatar="🧑"):
+        with msgs.chat_message("user", avatar="🧑‍💻"):
             st.write(prompt)
-        with msgs.chat_message("assistant", avatar="🤖"):
+        with msgs.chat_message("assistant", avatar="🚀"):
             generate_ai_response(prompt, msgs)
 
 
