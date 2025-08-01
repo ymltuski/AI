@@ -38,7 +38,7 @@ st.markdown("""
         margin: 0;
     }
     .upload-section {
-        border: 2px dashed #667eea;
+        border: 0.5px dashed #667eea;
         border-radius: 10px;
         padding: 1rem;
         margin: 1rem 0;
@@ -68,8 +68,8 @@ st.markdown("""
     .action-button {
         background: transparent;
         border: none; /* 移除边框 */
-        border-radius: 4px;
-        padding: 2px;
+        border-radius: 0px;
+        padding: 0px;
         cursor: pointer;
         font-size: 16px;
         color: #666;
