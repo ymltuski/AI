@@ -58,8 +58,8 @@ st.markdown("""
     /* 修改按钮组样式 - 放在左下角 */
     .message-actions {
         display: flex;
-        gap: 5px; /* 调整按钮之间的间距 */
-        margin-top: 8px;
+        gap: 2px; /* 调整按钮之间的间距 */
+        margin-top: 4px;
         align-items: center;
         justify-content: flex-start;
     }
@@ -69,7 +69,7 @@ st.markdown("""
         background: transparent;
         border: none; /* 移除边框 */
         border-radius: 4px;
-        padding: 4px;
+        padding: 2px;
         cursor: pointer;
         font-size: 16px;
         color: #666;
@@ -77,8 +77,8 @@ st.markdown("""
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        width: 28px;
-        height: 28px;
+        width: 24px;
+        height: 24px;
         text-decoration: none;
         font-family: inherit;
     }
@@ -107,7 +107,6 @@ st.markdown("""
     /* 重新生成按钮样式 */
     .regenerate-button {
         color: #666;
-        border: none; /* 移除边框 */
     }
         
     .regenerate-button:hover {
