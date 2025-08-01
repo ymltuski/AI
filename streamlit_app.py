@@ -741,17 +741,6 @@ def main():
         with msgs.chat_message("assistant"):
             generate_ai_response(prompt, msgs)
         
-    # 底部信息
-    st.markdown("---")
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("对话轮数", len(st.session_state.messages) // 2)
-    with col2:
-        uploaded_count = len(st.session_state.get('uploaded_files_info', []))
-        st.metric("已上传文件", uploaded_count)
-    with col3:
-        memory_count = len(st.session_state.chat_history) // 2
-        st.metric("记忆对话数", memory_count)
-
+    
 if __name__ == "__main__":
     main()
