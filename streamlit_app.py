@@ -665,7 +665,6 @@ def generate_ai_response(prompt, msgs):
             st.code(str(e))
 
 # ---------- Streamlit 主界面 ----------
-# ---------- Streamlit 主界面 ----------
 def main():
     # 初始化会话状态
     initialize_session_state()
@@ -685,7 +684,7 @@ def main():
         margin-bottom: 2rem;
     }
     </style>
-    <div class="custom-title">🌐 重庆科技大学 · 智能问答系统</div>
+    <div class="custom-title">🦜🔗 重庆科技大学 · 智能问答系统</div>
     """, unsafe_allow_html=True)
 
     # 设置侧边栏
@@ -706,7 +705,7 @@ def main():
 
     # 显示聊天历史（带头像 + 美化气泡）
     for i, (role, text) in enumerate(st.session_state.messages):
-        avatar = "🧑‍💼" if role == "user" else "🤖"
+        avatar = "🧑" if role == "user" else "🤖"
         bubble_color = "#f0f2f6" if role == "user" else "#e6f0ff"
 
         with msgs.chat_message(role, avatar=avatar):
@@ -751,10 +750,11 @@ def main():
     # 用户输入框
     if prompt := st.chat_input("请输入你的问题..."):
         st.session_state.messages.append(("user", prompt))
-        with msgs.chat_message("user", avatar="🧑‍💼"):
+        with msgs.chat_message("user", avatar="🧑"):
             st.write(prompt)
         with msgs.chat_message("assistant", avatar="🤖"):
             generate_ai_response(prompt, msgs)
+
 
 # 程序入口
 if __name__ == "__main__":
