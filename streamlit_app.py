@@ -132,46 +132,67 @@ st.markdown("""
         display: inline-flex;
     }
 
-    /* 自定义重新生成按钮样式 - 去掉边框和背景 */
-    .stButton > button[data-testid="baseButton-secondary"] {
+    /* 自定义重新生成按钮样式 - 完全去掉边框和背景 */
+    .stButton > button {
         background: transparent !important;
         border: none !important;
-        padding: 0 !important;
+        padding: 4px !important;
         width: auto !important;
         height: auto !important;
         box-shadow: none !important;
         font-size: 18px !important;
         color: #666 !important;
         transition: all 0.2s ease !important;
+        outline: none !important;
+        min-height: auto !important;
     }
     
-    .stButton > button[data-testid="baseButton-secondary"]:hover {
-        background: #f0f0f0 !important;
+    .stButton > button:hover {
+        background: rgba(240, 240, 240, 0.5) !important;
         color: #333 !important;
         transform: scale(1.1) !important;
         border-radius: 4px !important;
         border: none !important;
         box-shadow: none !important;
+        outline: none !important;
     }
     
-    .stButton > button[data-testid="baseButton-secondary"]:focus {
+    .stButton > button:focus {
         background: transparent !important;
         border: none !important;
         box-shadow: none !important;
         outline: none !important;
     }
     
-    .stButton > button[data-testid="baseButton-secondary"]:active {
-        background: #e0e0e0 !important;
+    .stButton > button:active {
+        background: rgba(224, 224, 224, 0.5) !important;
         border: none !important;
         box-shadow: none !important;
         transform: scale(0.95) !important;
+        outline: none !important;
+    }
+
+    /* 更强的样式覆盖 - 针对所有可能的按钮状态 */
+    .stButton > button[data-testid*="button"], 
+    .stButton > button[kind="secondary"],
+    .stButton > button[kind="primary"] {
+        background: transparent !important;
+        border: 0px solid transparent !important;
+        border-width: 0 !important;
+        box-shadow: none !important;
+        outline: none !important;
     }
 
     /* 确保按钮容器也没有多余样式 */
     .stButton {
         margin: 0 !important;
         padding: 0 !important;
+    }
+    
+    /* 移除任何可能的边框相关样式 */
+    .stButton button::before,
+    .stButton button::after {
+        display: none !important;
     }
 </style>
 """, unsafe_allow_html=True)
