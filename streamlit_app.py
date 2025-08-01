@@ -250,37 +250,9 @@ def create_streamlit_action_buttons(message_index, message_text, question=None):
     with col1:
         # 复制按钮
         if st.button("📋", key=f"copy_{message_index}", help="复制到剪贴板"):
-            # 直接显示复制成功提示，并将内容存储到会话状态供用户查看
-            st.success("✅ 已复制到剪贴板！", icon="📋")
-            # 使用JavaScript实现真正的复制功能
-            copy_js = f"""
-            <script>
-            const text = `{message_text.replace('`', '\\`').replace('\\', '\\\\').replace('\n', '\\n').replace('\r', '\\r')}`;
-            if (navigator.clipboard && window.isSecureContext) {{
-                navigator.clipboard.writeText(text).then(function() {{
-                    console.log('复制成功');
-                }}).catch(function(err) {{
-                    console.error('复制失败:', err);
-                    // 备用方案
-                    const textArea = document.createElement('textarea');
-                    textArea.value = text;
-                    document.body.appendChild(textArea);
-                    textArea.select();
-                    document.execCommand('copy');
-                    document.body.removeChild(textArea);
-                }});
-            }} else {{
-                // 备用方案
-                const textArea = document.createElement('textarea');
-                textArea.value = text;
-                document.body.appendChild(textArea);
-                textArea.select();
-                document.execCommand('copy');
-                document.body.removeChild(textArea);
-            }}
-            </script>
-            """
-            st.components.v1.html(copy_js, height=0)
+            # 显示文本内容供用户手动复制
+            st.code(message_text, language=None)
+            st.info("👆 请选中上方文本内容，然后按 Ctrl+C (Windows) 或 Cmd+C (Mac) 复制")
     
     with col2:
         # 重新生成按钮
