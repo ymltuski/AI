@@ -148,42 +148,6 @@ st.markdown("""
     .status-message.show {
         display: inline-flex;
     }
-
-    /* 自定义小尺寸按钮样式 */
-    .stButton > button {
-        background: rgb(255, 255, 255);
-        border: 1px solid rgb(204, 204, 204);
-        border-radius: 6px;
-        color: rgb(49, 51, 63);
-        cursor: pointer;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        font-family: 'Source Sans Pro', sans-serif;
-        font-size: 18px;
-        font-weight: 400;
-        height: 36px;
-        line-height: 1;
-        margin: 0px;
-        padding: 6px;
-        text-align: center;
-        text-decoration: none;
-        transition: all 0.2s ease;
-        user-select: none;
-        width: 36px;
-        min-width: 36px;
-    }
-        
-    .stButton > button:hover {
-        border-color: rgb(255, 75, 75);
-        color: rgb(255, 75, 75);
-    }
-        
-    .stButton > button:active {
-        background-color: rgb(255, 75, 75);
-        border-color: rgb(255, 75, 75);
-        color: rgb(255, 255, 255);
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -232,83 +196,51 @@ def create_message_actions(message_index, message_text, question=None):
                 st.session_state.regenerate_index = message_index
                 st.rerun()
 
-# 修改后的 create_copy_button_html 函数 - 统一按钮样式，不显示状态
+# 修改后的 create_copy_button_html 函数 - 添加白色边框样式并修复显示问题
 def create_copy_button_html(message_index, message_text):
-    """创建带白色边框的复制按钮HTML，与Streamlit按钮样式一致"""
+    """创建带白色边框的复制按钮HTML"""
     # 转义文本中的特殊字符
     escaped_text = message_text.replace('\\', '\\\\').replace('`', '\\`').replace("'", "\\'").replace('"', '\\"').replace('\n', '\\n').replace('\r', '\\r')
 
     copy_html = f'''
-    <div style="height: 38px; display: flex; align-items: center;">
+    <div style="display: flex; align-items: center; gap: 10px; margin: 5px 0; height: 40px;">
         <button onclick="copyToClipboard{message_index}()"
-                style="
-                    background: rgb(255, 255, 255);
-                    border: 1px solid rgb(204, 204, 204);
-                    border-radius: 0.5rem;
-                    color: rgb(49, 51, 63);
-                    cursor: pointer;
-                    display: inline-flex;
-                    align-items: center;
-                    justify-content: center;
-                    font-family: 'Source Sans Pro', sans-serif;
-                    font-size: 14px;
-                    font-weight: 400;
-                    height: 38px;
-                    line-height: 1.6;
-                    margin: 0px;
-                    padding: 0.25rem 0.75rem;
-                    text-align: center;
-                    text-decoration: none;
-                    transition: all 0.2s ease;
-                    user-select: none;
-                    width: auto;
-                    min-width: 60px;
-                "
-                onmouseover="
-                    this.style.borderColor='rgb(255, 75, 75)';
-                    this.style.color='rgb(255, 75, 75)';
-                "
-                onmouseout="
-                    this.style.borderColor='rgb(204, 204, 204)';
-                    this.style.color='rgb(49, 51, 63)';
-                "
-                onmousedown="
-                    this.style.backgroundColor='rgb(255, 75, 75)';
-                    this.style.borderColor='rgb(255, 75, 75)';
-                    this.style.color='rgb(255, 255, 255)';
-                "
-                onmouseup="
-                    this.style.backgroundColor='rgb(255, 255, 255)';
-                    this.style.borderColor='rgb(204, 204, 204)';
-                    this.style.color='rgb(49, 51, 63)';
-                "
-                title="复制消息到剪贴板">
+                class="copy-button"
+                style="background: white; border: 1px solid #ddd; border-radius: 6px; padding: 6px; cursor: pointer; font-size: 18px; color: #666; transition: all 0.2s ease; display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); flex-shrink: 0;"
+                onmouseover="this.style.background='#f8f9fa'; this.style.borderColor='#adb5bd'; this.style.color='#333'; this.style.transform='translateY(-1px)'; this.style.boxShadow='0 2px 6px rgba(0,0,0,0.15)';"
+                onmouseout="this.style.background='white'; this.style.borderColor='#ddd'; this.style.color='#666'; this.style.transform='translateY(0px)'; this.style.boxShadow='0 1px 3px rgba(0,0,0,0.1)';">
             📋
         </button>
+        <span id="copy-status-{message_index}" style="color: #28a745; font-size: 12px; line-height: 1;"></span>
     </div>
 
     <script>
     function copyToClipboard{message_index}() {{
         const text = `{escaped_text}`;
+        const statusElement = document.getElementById('copy-status-{message_index}');
         const button = event.target;
 
         if (navigator.clipboard && window.isSecureContext) {{
             navigator.clipboard.writeText(text).then(function() {{
-                // 简单的视觉反馈，不显示文字
-                const originalColor = button.style.color;
+                statusElement.textContent = '✅ 已复制';
                 button.style.color = '#28a745';
+                button.style.background = '#f0f8f0';
+                button.style.borderColor = '#28a745';
                 setTimeout(() => {{
-                    button.style.color = originalColor;
-                }}, 300);
+                    statusElement.textContent = '';
+                    button.style.color = '#666';
+                    button.style.background = 'white';
+                    button.style.borderColor = '#ddd';
+                }}, 2000);
             }}).catch(function(err) {{
-                fallbackCopy{message_index}(text, button);
+                fallbackCopy{message_index}(text, statusElement, button);
             }});
         }} else {{
-            fallbackCopy{message_index}(text, button);
+            fallbackCopy{message_index}(text, statusElement, button);
         }}
     }}
 
-    function fallbackCopy{message_index}(text, button) {{
+    function fallbackCopy{message_index}(text, statusElement, button) {{
         const textArea = document.createElement('textarea');
         textArea.value = text;
         textArea.style.position = 'fixed';
@@ -321,18 +253,24 @@ def create_copy_button_html(message_index, message_text):
         try {{
             const successful = document.execCommand('copy');
             if (successful) {{
-                // 简单的视觉反馈
-                const originalColor = button.style.color;
+                statusElement.textContent = '✅ 已复制';
                 button.style.color = '#28a745';
-                setTimeout(() => {{
-                    button.style.color = originalColor;
-                }}, 300);
+                button.style.background = '#f0f8f0';
+                button.style.borderColor = '#28a745';
+            }} else {{
+                statusElement.textContent = '❌ 复制失败';
             }}
         }} catch (err) {{
-            // 静默处理错误
+            statusElement.textContent = '❌ 复制失败';
         }}
 
         document.body.removeChild(textArea);
+        setTimeout(() => {{
+            statusElement.textContent = '';
+            button.style.color = '#666';
+            button.style.background = 'white';
+            button.style.borderColor = '#ddd';
+        }}, 2000);
     }}
     </script>
     '''
@@ -701,14 +639,17 @@ def generate_ai_response(prompt, msgs):
         # 添加复制按钮和重新生成按钮
         message_index = len(st.session_state.messages) - 1
                 
-        # 创建水平排列的按钮组
-        button_cols = st.columns([1, 1, 10])
+        # 使用HTML按钮组（水平排列）
+        st.markdown("---")  # 添加分隔线
         
-        with button_cols[0]:
+        # 创建水平排列的按钮
+        button_col1, button_col2, button_col3 = st.columns([1, 1, 8])
+        
+        with button_col1:
             copy_html = create_copy_button_html(message_index, response)
-            st.components.v1.html(copy_html, height=38)
+            st.components.v1.html(copy_html, height=50)
                 
-        with button_cols[1]:
+        with button_col2:
             # 重新生成按钮
             if st.button("🔄", key=f"regen_new_{message_index}", help="重新生成回答"):
                 st.session_state.regenerate_question = prompt
@@ -763,15 +704,18 @@ def main():
                 if i > 0 and st.session_state.messages[i-1][0] == "user":
                     question = st.session_state.messages[i-1][1]
                                 
-                # 创建水平排列的按钮组
-                button_cols = st.columns([1, 1, 10])
+                # 创建按钮组（水平排列）
+                st.markdown("---")  # 添加分隔线
                 
-                with button_cols[0]:
+                # 使用columns让两个按钮水平排列
+                button_col1, button_col2, button_col3 = st.columns([1, 1, 8])
+                
+                with button_col1:
                     # HTML复制按钮
                     copy_html = create_copy_button_html(i, text)
-                    st.components.v1.html(copy_html, height=38)
+                    st.components.v1.html(copy_html, height=50)
                                 
-                with button_cols[1]:
+                with button_col2:
                     # 重新生成按钮
                     if question is not None:
                         if st.button("🔄", key=f"regen_history_{i}", help="重新生成回答"):
