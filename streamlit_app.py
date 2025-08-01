@@ -89,19 +89,36 @@ st.markdown("""
         transform: scale(1.1);
     }
         
-    /* 复制按钮样式 */
+    /* 修改后的复制按钮样式 - 添加白色边框 */
     .copy-button {
+        background: white;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        padding: 6px;
+        cursor: pointer;
+        font-size: 18px;
         color: #666;
+        transition: all 0.2s ease;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 36px;
+        height: 36px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     }
         
     .copy-button:hover {
+        background: #f8f9fa;
+        border-color: #adb5bd;
         color: #333;
-        background: #f0f0f0;
+        transform: translateY(-1px);
+        box-shadow: 0 2px 6px rgba(0,0,0,0.15);
     }
         
     .copy-button.copied {
         color: #28a745;
         background: #f0f8f0;
+        border-color: #28a745;
     }
         
     /* 重新生成按钮样式 */
@@ -179,16 +196,19 @@ def create_message_actions(message_index, message_text, question=None):
                 st.session_state.regenerate_index = message_index
                 st.rerun()
 
-# 修改后的 create_copy_button_html 函数
+# 修改后的 create_copy_button_html 函数 - 添加白色边框样式
 def create_copy_button_html(message_index, message_text):
-    """创建简单的复制按钮HTML"""
+    """创建带白色边框的复制按钮HTML"""
     # 转义文本中的特殊字符
     escaped_text = message_text.replace('\\', '\\\\').replace('`', '\\`').replace("'", "\\'").replace('"', '\\"').replace('\n', '\\n').replace('\r', '\\r')
 
     copy_html = f'''
     <div style="margin: 10px 0;">
         <button onclick="copyToClipboard{message_index}()"
-                 style="background: transparent; border: none; padding: 0; border-radius: 6px; cursor: pointer; font-size: 18px;">
+                class="copy-button"
+                style="background: white; border: 1px solid #ddd; border-radius: 6px; padding: 6px; cursor: pointer; font-size: 18px; color: #666; transition: all 0.2s ease; display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);"
+                onmouseover="this.style.background='#f8f9fa'; this.style.borderColor='#adb5bd'; this.style.color='#333'; this.style.transform='translateY(-1px)'; this.style.boxShadow='0 2px 6px rgba(0,0,0,0.15)';"
+                onmouseout="this.style.background='white'; this.style.borderColor='#ddd'; this.style.color='#666'; this.style.transform='translateY(0px)'; this.style.boxShadow='0 1px 3px rgba(0,0,0,0.1)';">
             📋
         </button>
         <span id="copy-status-{message_index}" style="margin-left: 10px; color: #28a745; font-size: 12px;"></span>
@@ -198,20 +218,29 @@ def create_copy_button_html(message_index, message_text):
     function copyToClipboard{message_index}() {{
         const text = `{escaped_text}`;
         const statusElement = document.getElementById('copy-status-{message_index}');
+        const button = event.target;
 
         if (navigator.clipboard && window.isSecureContext) {{
             navigator.clipboard.writeText(text).then(function() {{
                 statusElement.textContent = '✅';
-                setTimeout(() => statusElement.textContent = '', 2000);
+                button.style.color = '#28a745';
+                button.style.background = '#f0f8f0';
+                button.style.borderColor = '#28a745';
+                setTimeout(() => {{
+                    statusElement.textContent = '';
+                    button.style.color = '#666';
+                    button.style.background = 'white';
+                    button.style.borderColor = '#ddd';
+                }}, 2000);
             }}).catch(function(err) {{
-                fallbackCopy{message_index}(text, statusElement);
+                fallbackCopy{message_index}(text, statusElement, button);
             }});
         }} else {{
-            fallbackCopy{message_index}(text, statusElement);
+            fallbackCopy{message_index}(text, statusElement, button);
         }}
     }}
 
-    function fallbackCopy{message_index}(text, statusElement) {{
+    function fallbackCopy{message_index}(text, statusElement, button) {{
         const textArea = document.createElement('textarea');
         textArea.value = text;
         textArea.style.position = 'fixed';
@@ -225,6 +254,9 @@ def create_copy_button_html(message_index, message_text):
             const successful = document.execCommand('copy');
             if (successful) {{
                 statusElement.textContent = '✅';
+                button.style.color = '#28a745';
+                button.style.background = '#f0f8f0';
+                button.style.borderColor = '#28a745';
             }} else {{
                 statusElement.textContent = '❌';
             }}
@@ -233,7 +265,12 @@ def create_copy_button_html(message_index, message_text):
         }}
 
         document.body.removeChild(textArea);
-        setTimeout(() => statusElement.textContent = '', 2000);
+        setTimeout(() => {{
+            statusElement.textContent = '';
+            button.style.color = '#666';
+            button.style.background = 'white';
+            button.style.borderColor = '#ddd';
+        }}, 2000);
     }}
     </script>
     '''
