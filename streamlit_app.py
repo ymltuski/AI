@@ -312,36 +312,37 @@ def handle_regenerate_request():
     if st.session_state.regenerate_question is not None and st.session_state.regenerate_index is not None:
         question = st.session_state.regenerate_question
         message_index = st.session_state.regenerate_index
-                
+        
         try:
             # 找到对应的问题在messages中的位置
             # message_index是AI回答的索引，对应的问题应该在前一个位置
             if message_index > 0 and message_index < len(st.session_state.messages):
                 # 移除要重新生成的AI回答
                 st.session_state.messages = st.session_state.messages[:message_index]
-                                
+                
                 # 同样调整对话历史
                 # 每个用户问题对应一个 HumanMessage 和一个 AIMessage
                 pairs_to_keep = message_index // 2
                 st.session_state.chat_history = st.session_state.chat_history[:pairs_to_keep * 2]
-                                
+                
                 # 添加问题（如果还没有）
                 if not st.session_state.messages or st.session_state.messages[-1][0] != "user":
                     st.session_state.messages.append(("user", question))
                     st.session_state.chat_history.append(HumanMessage(content=question))
-                                
+                
                 # 清除重新生成请求
                 st.session_state.regenerate_question = None
                 st.session_state.regenerate_index = None
-                                
+                
                 return question  # 返回问题以便重新生成回答
-                        
+        
         except Exception as e:
             st.error(f"处理重新生成请求时出错: {e}")
             st.session_state.regenerate_question = None
             st.session_state.regenerate_index = None
         
     return None
+
 
 # ---------- 从本地 Markdown 文件获取文档内容 ----------
 def fetch_document_from_file(file_path):
@@ -646,41 +647,32 @@ def generate_ai_response(prompt, msgs):
             "question": prompt,
             "chat_history": st.session_state.chat_history
         }
-                
+        
         # 显示处理状态
         with st.spinner("正在思考中..."):
             # 流式输出回答
-            response = st.write_stream(st.session_state.chain.stream(chain_input))
-                
+            response = st.session_state.chain.invoke(chain_input)
+        
         # 保存消息到历史记录
         st.session_state.messages.append(("assistant", response))
-                
+        
         # 更新对话历史（用于记忆功能）
         st.session_state.chat_history.extend([
             HumanMessage(content=prompt),
             AIMessage(content=response)
         ])
-                
+        
         # 限制对话历史长度，避免token过多
         if len(st.session_state.chat_history) > 20:
             st.session_state.chat_history = st.session_state.chat_history[-20:]
-                
+        
         # 添加复制按钮和重新生成按钮
         message_index = len(st.session_state.messages) - 1
-                
-        # 使用混合按钮组（HTML复制 + Streamlit重新生成）
-        col1, col2 = st.columns([1, 9])
-        with col1:
-            copy_html = create_copy_button_html(message_index, response)
-            st.components.v1.html(copy_html, height=40)
-                
-        with col2:
-            # 重新生成按钮 - 使用Streamlit按钮
-            if st.button("🔄", key=f"regen_new_{message_index}", help="重新生成回答"):
-                st.session_state.regenerate_question = prompt
-                st.session_state.regenerate_index = message_index
-                st.rerun()
-                    
+        
+        # 使用HTML按钮组
+        action_html = create_action_buttons_html(message_index, response, prompt)
+        st.components.v1.html(action_html, height=50)
+        
     except Exception as e:
         error_msg = f"生成回答时出错: {str(e)}"
         st.error(error_msg)
