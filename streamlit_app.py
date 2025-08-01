@@ -242,19 +242,38 @@ def create_message_actions(message_index, message_text, question=None):
                 st.session_state.regenerate_index = message_index
                 st.rerun()
 
-# 修改后的 create_copy_button_html 函数
-def create_copy_button_html(message_index, message_text):
-    """创建简单的复制按钮HTML"""
+# 创建HTML按钮组（包括复制和重新生成按钮）
+def create_action_buttons_html(message_index, message_text, question=None):
+    """创建操作按钮组HTML"""
     # 转义文本中的特殊字符
     escaped_text = message_text.replace('\\', '\\\\').replace('`', '\\`').replace("'", "\\'").replace('"', '\\"').replace('\n', '\\n').replace('\r', '\\r')
+    
+    # 如果有问题，显示重新生成按钮
+    regenerate_button = ""
+    if question is not None:
+        escaped_question = question.replace('\\', '\\\\').replace('`', '\\`').replace("'", "\\'").replace('"', '\\"').replace('\n', '\\n').replace('\r', '\\r')
+        regenerate_button = f'''
+        <button onclick="regenerateAnswer{message_index}()"
+                 style="background: transparent; border: none; padding: 4px; margin-left: 10px; border-radius: 4px; cursor: pointer; font-size: 18px; color: #666; transition: all 0.2s ease;"
+                 onmouseover="this.style.background='#f0f0f0'; this.style.transform='scale(1.1)'"
+                 onmouseout="this.style.background='transparent'; this.style.transform='scale(1)'"
+                 title="重新生成回答">
+            🔄
+        </button>
+        '''
 
-    copy_html = f'''
-    <div style="margin: 10px 0;">
+    action_html = f'''
+    <div style="margin: 10px 0; display: flex; align-items: center;">
         <button onclick="copyToClipboard{message_index}()"
-                 style="background: transparent; border: none; padding: 0; border-radius: 6px; cursor: pointer; font-size: 18px;">
+                 style="background: transparent; border: none; padding: 4px; border-radius: 4px; cursor: pointer; font-size: 18px; color: #666; transition: all 0.2s ease;"
+                 onmouseover="this.style.background='#f0f0f0'; this.style.transform='scale(1.1)'"
+                 onmouseout="this.style.background='transparent'; this.style.transform='scale(1)'"
+                 title="复制到剪贴板">
             📋
         </button>
+        {regenerate_button}
         <span id="copy-status-{message_index}" style="margin-left: 10px; color: #28a745; font-size: 12px;"></span>
+        <span id="regen-status-{message_index}" style="margin-left: 10px; color: #007bff; font-size: 12px;"></span>
     </div>
 
     <script>
@@ -264,7 +283,7 @@ def create_copy_button_html(message_index, message_text):
 
         if (navigator.clipboard && window.isSecureContext) {{
             navigator.clipboard.writeText(text).then(function() {{
-                statusElement.textContent = '✅';
+                statusElement.textContent = '✅ 已复制';
                 setTimeout(() => statusElement.textContent = '', 2000);
             }}).catch(function(err) {{
                 fallbackCopy{message_index}(text, statusElement);
@@ -287,21 +306,33 @@ def create_copy_button_html(message_index, message_text):
         try {{
             const successful = document.execCommand('copy');
             if (successful) {{
-                statusElement.textContent = '✅';
+                statusElement.textContent = '✅ 已复制';
             }} else {{
-                statusElement.textContent = '❌';
+                statusElement.textContent = '❌ 复制失败';
             }}
         }} catch (err) {{
-            statusElement.textContent = '❌';
+            statusElement.textContent = '❌ 复制失败';
         }}
 
         document.body.removeChild(textArea);
         setTimeout(() => statusElement.textContent = '', 2000);
     }}
+
+    function regenerateAnswer{message_index}() {{
+        const statusElement = document.getElementById('regen-status-{message_index}');
+        statusElement.textContent = '🔄 重新生成中...';
+        
+        // 触发Streamlit的重新生成
+        window.parent.postMessage({{
+            type: 'streamlit:regenerateAnswer',
+            messageIndex: {message_index},
+            question: `{escaped_question if question else ''}`
+        }}, '*');
+    }}
     </script>
     '''
 
-    return copy_html
+    return action_html
 
 # ---------- 处理重新生成请求 ----------
 def handle_regenerate_request():
@@ -665,18 +696,9 @@ def generate_ai_response(prompt, msgs):
         # 添加复制按钮和重新生成按钮
         message_index = len(st.session_state.messages) - 1
                 
-        # 使用HTML按钮组（放在左下角）
-        col1, col2 = st.columns([1, 9])
-        with col1:
-            copy_html = create_copy_button_html(message_index, response)
-            st.components.v1.html(copy_html, height=40)
-                
-        with col2:
-            # 重新生成按钮
-            if st.button("🔄", key=f"regen_new_{message_index}", help="重新生成回答"):
-                st.session_state.regenerate_question = prompt
-                st.session_state.regenerate_index = message_index
-                st.rerun()
+        # 使用HTML按钮组
+        action_html = create_action_buttons_html(message_index, response, prompt)
+        st.components.v1.html(action_html, height=50)
                     
     except Exception as e:
         error_msg = f"生成回答时出错: {str(e)}"
@@ -726,21 +748,9 @@ def main():
                 if i > 0 and st.session_state.messages[i-1][0] == "user":
                     question = st.session_state.messages[i-1][1]
                                 
-                # 创建按钮组（放在左下角）
-                col1, col2 = st.columns([1, 9])
-                                
-                with col1:
-                    # HTML复制按钮
-                    copy_html = create_copy_button_html(i, text)
-                    st.components.v1.html(copy_html, height=40)
-                                
-                with col2:
-                    # 重新生成按钮
-                    if question is not None:
-                        if st.button("🔄", key=f"regen_history_{i}", help="重新生成回答"):
-                            st.session_state.regenerate_question = question
-                            st.session_state.regenerate_index = i
-                            st.rerun()
+                # 使用HTML按钮组
+                action_html = create_action_buttons_html(i, text, question)
+                st.components.v1.html(action_html, height=50)
         
     # 如果有重新生成请求，先处理它
     if regenerate_question:
