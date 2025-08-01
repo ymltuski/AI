@@ -114,13 +114,12 @@ def initialize_session_state():
         st.session_state.regenerate_index = None
 
 # ---------- 重新生成功能的Streamlit组件 ----------
-# 修改后的 create_message_actions 函数
 def create_message_actions(message_index, message_text, question=None):
     """创建消息操作按钮组"""
     # 使用单列布局
     with st.container():
         # 复制按钮
-        if st.button("📋", key=f"copy_{message_index}", help="复制消息到剪贴板"):
+        if st.button("📋", key=f"copy_{message_index}", help="复制消息到剪贴板", args=None, on_click=None):
             # 使用JavaScript复制功能
             copy_js = f"""
             <script>
@@ -136,23 +135,26 @@ def create_message_actions(message_index, message_text, question=None):
 
         # 重新生成按钮（仅对AI回答显示）
         if question is not None:
-            if st.button("🔄", key=f"regen_{message_index}", help="重新生成回答"):
+            if st.button("🔄", key=f"regen_{message_index}", help="重新生成回答", args=None, on_click=None, disabled=False):
                 # 设置重新生成的请求
                 st.session_state.regenerate_question = question
                 st.session_state.regenerate_index = message_index
                 st.rerun()
 
-# 修改后的 create_copy_button_html 函数
 def create_copy_button_html(message_index, message_text):
     """创建简单的复制按钮HTML"""
     # 转义文本中的特殊字符
     escaped_text = message_text.replace('\\', '\\\\').replace('`', '\\`').replace("'", "\\'").replace('"', '\\"').replace('\n', '\\n').replace('\r', '\\r')
 
     copy_html = f'''
-    <div style="margin: 10px 0; display: flex; justify-content: flex-start; align-items: center;">
+    <div style="display: flex; align-items: center; margin: 5px 0;">
         <button onclick="copyToClipboard{message_index}()"
-                 style="background: transparent; border: none; padding: 0; border-radius: 6px; cursor: pointer; font-size: 18px;">
+                 style="background: transparent; border: none; padding: 5px; border-radius: 4px; cursor: pointer; font-size: 18px; margin-right: 5px;">
             📋
+        </button>
+        <button onclick="regenerateAnswer{message_index}()"
+                 style="background: transparent; border: none; padding: 5px; border-radius: 4px; cursor: pointer; font-size: 18px;">
+            🔄
         </button>
         <span id="copy-status-{message_index}" style="margin-left: 10px; color: #28a745; font-size: 12px;"></span>
     </div>
@@ -198,9 +200,17 @@ def create_copy_button_html(message_index, message_text):
         document.body.removeChild(textArea);
         setTimeout(() => statusElement.textContent = '', 2000);
     }}
+
+    function regenerateAnswer{message_index}() {{
+        // 设置重新生成的请求
+        const question = st.session_state.regenerate_question;
+        const index = st.session_state.regenerate_index;
+        st.session_state.regenerate_question = question;
+        st.session_state.regenerate_index = index;
+        st.rerun();
+    }}
     </script>
     '''
-
     return copy_html
 
 # ---------- 处理重新生成请求 ----------
