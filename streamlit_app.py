@@ -131,69 +131,6 @@ st.markdown("""
     .status-message.show {
         display: inline-flex;
     }
-
-    /* 自定义重新生成按钮样式 - 完全去掉边框和背景 */
-    .stButton > button {
-        background: transparent !important;
-        border: none !important;
-        padding: 4px !important;
-        width: auto !important;
-        height: auto !important;
-        box-shadow: none !important;
-        font-size: 18px !important;
-        color: #666 !important;
-        transition: all 0.2s ease !important;
-        outline: none !important;
-        min-height: auto !important;
-    }
-    
-    .stButton > button:hover {
-        background: rgba(240, 240, 240, 0.5) !important;
-        color: #333 !important;
-        transform: scale(1.1) !important;
-        border-radius: 4px !important;
-        border: none !important;
-        box-shadow: none !important;
-        outline: none !important;
-    }
-    
-    .stButton > button:focus {
-        background: transparent !important;
-        border: none !important;
-        box-shadow: none !important;
-        outline: none !important;
-    }
-    
-    .stButton > button:active {
-        background: rgba(224, 224, 224, 0.5) !important;
-        border: none !important;
-        box-shadow: none !important;
-        transform: scale(0.95) !important;
-        outline: none !important;
-    }
-
-    /* 更强的样式覆盖 - 针对所有可能的按钮状态 */
-    .stButton > button[data-testid*="button"], 
-    .stButton > button[kind="secondary"],
-    .stButton > button[kind="primary"] {
-        background: transparent !important;
-        border: 0px solid transparent !important;
-        border-width: 0 !important;
-        box-shadow: none !important;
-        outline: none !important;
-    }
-
-    /* 确保按钮容器也没有多余样式 */
-    .stButton {
-        margin: 0 !important;
-        padding: 0 !important;
-    }
-    
-    /* 移除任何可能的边框相关样式 */
-    .stButton button::before,
-    .stButton button::after {
-        display: none !important;
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -251,10 +188,7 @@ def create_copy_button_html(message_index, message_text):
     copy_html = f'''
     <div style="margin: 10px 0;">
         <button onclick="copyToClipboard{message_index}()"
-                 style="background: transparent; border: none; padding: 4px; border-radius: 4px; cursor: pointer; font-size: 18px; color: #666; transition: all 0.2s ease;"
-                 onmouseover="this.style.background='#f0f0f0'; this.style.transform='scale(1.1)'"
-                 onmouseout="this.style.background='transparent'; this.style.transform='scale(1)'"
-                 title="复制到剪贴板">
+                 style="background: transparent; border: none; padding: 0; border-radius: 6px; cursor: pointer; font-size: 18px;">
             📋
         </button>
         <span id="copy-status-{message_index}" style="margin-left: 10px; color: #28a745; font-size: 12px;"></span>
@@ -267,7 +201,7 @@ def create_copy_button_html(message_index, message_text):
 
         if (navigator.clipboard && window.isSecureContext) {{
             navigator.clipboard.writeText(text).then(function() {{
-                statusElement.textContent = '✅ 已复制';
+                statusElement.textContent = '✅';
                 setTimeout(() => statusElement.textContent = '', 2000);
             }}).catch(function(err) {{
                 fallbackCopy{message_index}(text, statusElement);
@@ -290,12 +224,12 @@ def create_copy_button_html(message_index, message_text):
         try {{
             const successful = document.execCommand('copy');
             if (successful) {{
-                statusElement.textContent = '✅ 已复制';
+                statusElement.textContent = '✅';
             }} else {{
-                statusElement.textContent = '❌ 复制失败';
+                statusElement.textContent = '❌';
             }}
         }} catch (err) {{
-            statusElement.textContent = '❌ 复制失败';
+            statusElement.textContent = '❌';
         }}
 
         document.body.removeChild(textArea);
@@ -312,37 +246,36 @@ def handle_regenerate_request():
     if st.session_state.regenerate_question is not None and st.session_state.regenerate_index is not None:
         question = st.session_state.regenerate_question
         message_index = st.session_state.regenerate_index
-        
+                
         try:
             # 找到对应的问题在messages中的位置
             # message_index是AI回答的索引，对应的问题应该在前一个位置
             if message_index > 0 and message_index < len(st.session_state.messages):
                 # 移除要重新生成的AI回答
                 st.session_state.messages = st.session_state.messages[:message_index]
-                
+                                
                 # 同样调整对话历史
                 # 每个用户问题对应一个 HumanMessage 和一个 AIMessage
                 pairs_to_keep = message_index // 2
                 st.session_state.chat_history = st.session_state.chat_history[:pairs_to_keep * 2]
-                
+                                
                 # 添加问题（如果还没有）
                 if not st.session_state.messages or st.session_state.messages[-1][0] != "user":
                     st.session_state.messages.append(("user", question))
                     st.session_state.chat_history.append(HumanMessage(content=question))
-                
+                                
                 # 清除重新生成请求
                 st.session_state.regenerate_question = None
                 st.session_state.regenerate_index = None
-                
+                                
                 return question  # 返回问题以便重新生成回答
-        
+                        
         except Exception as e:
             st.error(f"处理重新生成请求时出错: {e}")
             st.session_state.regenerate_question = None
             st.session_state.regenerate_index = None
         
     return None
-
 
 # ---------- 从本地 Markdown 文件获取文档内容 ----------
 def fetch_document_from_file(file_path):
@@ -647,32 +580,41 @@ def generate_ai_response(prompt, msgs):
             "question": prompt,
             "chat_history": st.session_state.chat_history
         }
-        
+                
         # 显示处理状态
         with st.spinner("正在思考中..."):
             # 流式输出回答
-            response = st.session_state.chain.invoke(chain_input)
-        
+            response = st.write_stream(st.session_state.chain.stream(chain_input))
+                
         # 保存消息到历史记录
         st.session_state.messages.append(("assistant", response))
-        
+                
         # 更新对话历史（用于记忆功能）
         st.session_state.chat_history.extend([
             HumanMessage(content=prompt),
             AIMessage(content=response)
         ])
-        
+                
         # 限制对话历史长度，避免token过多
         if len(st.session_state.chat_history) > 20:
             st.session_state.chat_history = st.session_state.chat_history[-20:]
-        
+                
         # 添加复制按钮和重新生成按钮
         message_index = len(st.session_state.messages) - 1
-        
-        # 使用HTML按钮组
-        action_html = create_action_buttons_html(message_index, response, prompt)
-        st.components.v1.html(action_html, height=50)
-        
+                
+        # 使用HTML按钮组（放在左下角）
+        col1, col2 = st.columns([1, 9])
+        with col1:
+            copy_html = create_copy_button_html(message_index, response)
+            st.components.v1.html(copy_html, height=40)
+                
+        with col2:
+            # 重新生成按钮
+            if st.button("🔄", key=f"regen_new_{message_index}", help="重新生成回答"):
+                st.session_state.regenerate_question = prompt
+                st.session_state.regenerate_index = message_index
+                st.rerun()
+                    
     except Exception as e:
         error_msg = f"生成回答时出错: {str(e)}"
         st.error(error_msg)
@@ -730,7 +672,7 @@ def main():
                     st.components.v1.html(copy_html, height=40)
                                 
                 with col2:
-                    # 重新生成按钮 - 使用Streamlit按钮
+                    # 重新生成按钮
                     if question is not None:
                         if st.button("🔄", key=f"regen_history_{i}", help="重新生成回答"):
                             st.session_state.regenerate_question = question
