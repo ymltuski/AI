@@ -38,7 +38,7 @@ st.markdown("""
         margin: 0;
     }
     .upload-section {
-        border: 0.5px dashed #667eea;
+        border: 2px dashed #667eea;
         border-radius: 10px;
         padding: 1rem;
         margin: 1rem 0;
@@ -58,8 +58,8 @@ st.markdown("""
     /* 修改按钮组样式 - 放在左下角 */
     .message-actions {
         display: flex;
-        gap: 2px; /* 调整按钮之间的间距 */
-        margin-top: 4px;
+        gap: 5px;
+        margin-top: 8px;
         align-items: center;
         justify-content: flex-start;
     }
@@ -67,9 +67,9 @@ st.markdown("""
     /* 简化的按钮样式 - 只显示图标，无边框 */
     .action-button {
         background: transparent;
-        border: none; /* 移除边框 */
-        border-radius: 0px;
-        padding: 0px;
+        border: none;
+        border-radius: 4px;
+        padding: 4px;
         cursor: pointer;
         font-size: 16px;
         color: #666;
@@ -77,8 +77,8 @@ st.markdown("""
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        width: 24px;
-        height: 24px;
+        width: 28px;
+        height: 28px;
         text-decoration: none;
         font-family: inherit;
     }
@@ -130,6 +130,48 @@ st.markdown("""
         
     .status-message.show {
         display: inline-flex;
+    }
+
+    /* 自定义重新生成按钮样式 - 去掉边框和背景 */
+    .stButton > button[data-testid="baseButton-secondary"] {
+        background: transparent !important;
+        border: none !important;
+        padding: 0 !important;
+        width: auto !important;
+        height: auto !important;
+        box-shadow: none !important;
+        font-size: 18px !important;
+        color: #666 !important;
+        transition: all 0.2s ease !important;
+    }
+    
+    .stButton > button[data-testid="baseButton-secondary"]:hover {
+        background: #f0f0f0 !important;
+        color: #333 !important;
+        transform: scale(1.1) !important;
+        border-radius: 4px !important;
+        border: none !important;
+        box-shadow: none !important;
+    }
+    
+    .stButton > button[data-testid="baseButton-secondary"]:focus {
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+        outline: none !important;
+    }
+    
+    .stButton > button[data-testid="baseButton-secondary"]:active {
+        background: #e0e0e0 !important;
+        border: none !important;
+        box-shadow: none !important;
+        transform: scale(0.95) !important;
+    }
+
+    /* 确保按钮容器也没有多余样式 */
+    .stButton {
+        margin: 0 !important;
+        padding: 0 !important;
     }
 </style>
 """, unsafe_allow_html=True)
