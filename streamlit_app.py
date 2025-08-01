@@ -55,44 +55,81 @@ st.markdown("""
         margin-bottom: 1rem;
     }
         
-    /* 按钮组样式 - 横排显示 */
+    /* 修改按钮组样式 - 放在左下角 */
     .message-actions {
         display: flex;
-        gap: 8px;
+        gap: 5px;
         margin-top: 8px;
-        margin-bottom: 4px;
         align-items: center;
         justify-content: flex-start;
     }
         
-    /* 简洁按钮样式 - 类似截图风格 */
+    /* 简化的按钮样式 - 只显示图标，无边框 */
     .action-button {
         background: transparent;
-        border: 1px solid #e0e0e0;
-        border-radius: 6px;
-        padding: 6px 8px;
+        border: none;
+        border-radius: 4px;
+        padding: 4px;
         cursor: pointer;
-        font-size: 14px;
+        font-size: 16px;
         color: #666;
-        transition: all 0.15s ease;
+        transition: all 0.2s ease;
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        min-width: 32px;
-        height: 32px;
+        width: 28px;
+        height: 28px;
         text-decoration: none;
         font-family: inherit;
     }
         
     .action-button:hover {
-        background: #f8f9fa;
-        border-color: #d0d7de;
+        background: #f0f0f0;
         color: #333;
+        transform: scale(1.1);
     }
         
-    .action-button:active {
+    /* 复制按钮样式 */
+    .copy-button {
+        color: #666;
+    }
+        
+    .copy-button:hover {
+        color: #333;
         background: #f0f0f0;
-        transform: scale(0.98);
+    }
+        
+    .copy-button.copied {
+        color: #28a745;
+        background: #f0f8f0;
+    }
+        
+    /* 重新生成按钮样式 */
+    .regenerate-button {
+        color: #666;
+    }
+        
+    .regenerate-button:hover {
+        color: #333;
+        background: #f0f0f0;
+    }
+        
+    .regenerate-button.loading {
+        color: #ffc107;
+        background: #fff8e1;
+    }
+        
+    /* 状态提示样式 */
+    .status-message {
+        font-size: 11px;
+        color: #28a745;
+        margin-left: 5px;
+        display: none;
+        align-items: center;
+    }
+        
+    .status-message.show {
+        display: inline-flex;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -114,12 +151,13 @@ def initialize_session_state():
         st.session_state.regenerate_index = None
 
 # ---------- 重新生成功能的Streamlit组件 ----------
+# 修改后的 create_message_actions 函数
 def create_message_actions(message_index, message_text, question=None):
     """创建消息操作按钮组"""
-    # 使用单列布局
-    with st.container():
-        # 复制按钮
-        if st.button("📋", key=f"copy_{message_index}", help="复制消息到剪贴板", args=None, on_click=None):
+    col1, col2 = st.columns([1, 1])  # 创建两列，每列宽度相等
+
+    with col1:  # 复制按钮
+        if st.button("📋", key=f"copy_{message_index}", help="复制消息到剪贴板"):
             # 使用JavaScript复制功能
             copy_js = f"""
             <script>
@@ -133,28 +171,25 @@ def create_message_actions(message_index, message_text, question=None):
             st.components.v1.html(copy_js, height=0)
             st.success("已复制到剪贴板！", icon="✅")
 
-        # 重新生成按钮（仅对AI回答显示）
+    with col2:  # 重新生成按钮（仅对AI回答显示）
         if question is not None:
-            if st.button("🔄", key=f"regen_{message_index}", help="重新生成回答", args=None, on_click=None, disabled=False):
+            if st.button("🔄", key=f"regen_{message_index}", help="重新生成回答"):
                 # 设置重新生成的请求
                 st.session_state.regenerate_question = question
                 st.session_state.regenerate_index = message_index
                 st.rerun()
 
+# 修改后的 create_copy_button_html 函数
 def create_copy_button_html(message_index, message_text):
     """创建简单的复制按钮HTML"""
     # 转义文本中的特殊字符
     escaped_text = message_text.replace('\\', '\\\\').replace('`', '\\`').replace("'", "\\'").replace('"', '\\"').replace('\n', '\\n').replace('\r', '\\r')
 
     copy_html = f'''
-    <div style="display: flex; align-items: center; margin: 5px 0;">
+    <div style="margin: 10px 0;">
         <button onclick="copyToClipboard{message_index}()"
-                 style="background: transparent; border: none; padding: 5px; border-radius: 4px; cursor: pointer; font-size: 18px; margin-right: 5px;">
+                 style="background: transparent; border: none; padding: 0; border-radius: 6px; cursor: pointer; font-size: 18px;">
             📋
-        </button>
-        <button onclick="regenerateAnswer{message_index}()"
-                 style="background: transparent; border: none; padding: 5px; border-radius: 4px; cursor: pointer; font-size: 18px;">
-            🔄
         </button>
         <span id="copy-status-{message_index}" style="margin-left: 10px; color: #28a745; font-size: 12px;"></span>
     </div>
@@ -200,17 +235,9 @@ def create_copy_button_html(message_index, message_text):
         document.body.removeChild(textArea);
         setTimeout(() => statusElement.textContent = '', 2000);
     }}
-
-    function regenerateAnswer{message_index}() {{
-        // 设置重新生成的请求
-        const question = st.session_state.regenerate_question;
-        const index = st.session_state.regenerate_index;
-        st.session_state.regenerate_question = question;
-        st.session_state.regenerate_index = index;
-        st.rerun();
-    }}
     </script>
     '''
+
     return copy_html
 
 # ---------- 处理重新生成请求 ----------
@@ -575,15 +602,18 @@ def generate_ai_response(prompt, msgs):
         # 添加复制按钮和重新生成按钮
         message_index = len(st.session_state.messages) - 1
                 
-        # 使用HTML按钮组（横排显示）
-        copy_html = create_copy_button_html(message_index, response)
-        st.components.v1.html(copy_html, height=50)
-        
-        # 重新生成按钮（与HTML按钮配合）
-        if st.button("🔄", key=f"regen_new_{message_index}", help="重新生成回答"):
-            st.session_state.regenerate_question = prompt
-            st.session_state.regenerate_index = message_index
-            st.rerun()
+        # 使用HTML按钮组（放在左下角）
+        col1, col2 = st.columns([1, 9])
+        with col1:
+            copy_html = create_copy_button_html(message_index, response)
+            st.components.v1.html(copy_html, height=40)
+                
+        with col2:
+            # 重新生成按钮
+            if st.button("🔄", key=f"regen_new_{message_index}", help="重新生成回答"):
+                st.session_state.regenerate_question = prompt
+                st.session_state.regenerate_index = message_index
+                st.rerun()
                     
     except Exception as e:
         error_msg = f"生成回答时出错: {str(e)}"
