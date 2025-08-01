@@ -18,7 +18,7 @@ import json
 # 页面配置
 st.set_page_config(
     page_title="动手学大模型应用开发", 
-    page_icon="🦜🔗",
+    page_icon="🌐",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -684,7 +684,7 @@ def main():
         margin-bottom: 2rem;
     }
     </style>
-    <div class="custom-title">🦜🔗 重庆科技大学 · 智能问答系统</div>
+    <div class="custom-title">🌐 重庆科技大学 · 智能问答系统</div>
     """, unsafe_allow_html=True)
 
     # 设置侧边栏
