@@ -17,65 +17,74 @@ import json
 
 # 页面配置
 st.set_page_config(
-    page_title="智能问答测试", 
+    page_title="动手学大模型应用开发", 
     page_icon="🌐",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# 自定义CSS样式 - 添加固定高度和防止滚动
+# 自定义CSS样式 - 修改为固定高度布局
 st.markdown("""
 <style>
-    /* 固定整个页面高度，防止滚动 */
+    /* 固定页面高度，禁止滚动 */
     .main .block-container {
+        padding-top: 1rem;
+        padding-bottom: 1rem;
         max-height: 100vh;
         overflow: hidden;
-        padding-top: 1rem;
-        padding-bottom: 0rem;
     }
     
-    /* 固定侧边栏高度 */
-    .css-1d391kg {
-        max-height: 100vh;
-        overflow-y: auto;
-    }
-    
-    /* 确保标题不被遮挡 */
+    /* 固定标题高度 */
     .custom-title {
-        font-size: 32px !important;
+        font-size: 28px;
         font-weight: 800;
         text-align: center;
-        padding: 0.5rem !important;
+        padding: 0.5rem;
         color: white;
         background: linear-gradient(to right, #667eea, #764ba2);
-        border-radius: 12px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-        margin-bottom: 1rem !important;
-        position: relative;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        margin-bottom: 0.5rem;
+        height: 60px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    /* 智能问答标题 */
+    .qa-title {
+        font-size: 20px;
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+        color: #333;
+    }
+    
+    /* 聊天容器固定高度 */
+    .chat-container {
+        height: calc(100vh - 220px);
+        overflow-y: auto;
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+        padding: 0.5rem;
+        background: #fafafa;
+    }
+    
+    /* 输入框容器 */
+    .input-container {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: white;
+        padding: 0.5rem;
+        border-top: 1px solid #e0e0e0;
         z-index: 1000;
     }
     
-    /* 固定聊天容器高度 */
-    .stContainer {
-        max-height: calc(100vh - 200px) !important;
-        overflow-y: auto !important;
-    }
-    
-    /* 固定输入框位置 */
-    .stChatInput {
-        position: fixed !important;
-        bottom: 0 !important;
-        left: 0 !important;
-        right: 0 !important;
-        z-index: 1000 !important;
-        background: white !important;
-        border-top: 1px solid #e0e0e0 !important;
-        padding: 10px !important;
-    }
-    
-    /* 为输入框留出空间 */
-    .main-content {
-        margin-bottom: 80px !important;
+    /* 侧边栏高度调整 */
+    .css-1d391kg {
+        max-height: 100vh;
+        overflow-y: auto;
     }
     
     .main-header {
@@ -94,13 +103,6 @@ st.markdown("""
         border-radius: 10px;
         padding: 1rem;
         margin: 1rem 0;
-    }
-    .chat-container {
-        border-radius: 10px;
-        border: 1px solid #e0e0e0;
-        padding: 1rem;
-        max-height: calc(100vh - 300px);
-        overflow-y: auto;
     }
     .sidebar-info {
         background-color: #f0f2f6;
@@ -723,7 +725,7 @@ def main():
     # 初始化会话状态
     initialize_session_state()
     
-    # 页面标题（美化版且固定高度）
+    # 页面标题（紧凑版）
     st.markdown("""
     <div class="custom-title">🌐 重庆科技大学 · 智能问答系统</div>
     """, unsafe_allow_html=True)
@@ -735,17 +737,18 @@ def main():
     if "chain" not in st.session_state:
         st.session_state.chain = get_qa_chain_with_memory()
 
-    # 主聊天区域 - 添加固定高度容器
-    st.markdown('<div class="main-content">', unsafe_allow_html=True)
-    st.markdown("### 💬 智能问答")
-
     # 处理重新生成请求
     regenerate_question = handle_regenerate_request()
 
-    # 聊天消息容器 - 固定高度并可滚动
+    # 主聊天区域 - 使用固定高度容器
+    col1, col2 = st.columns([1, 10])
+    with col2:
+        st.markdown('<div class="qa-title">💬 智能问答</div>', unsafe_allow_html=True)
+
+    # 聊天消息容器 - 固定高度，避免滚动
     msgs = st.container(height=400)
 
-    # 显示聊天历史（带头像 + 美化气泡）
+    # 显示聊天历史（紧凑版气泡）
     for i, (role, text) in enumerate(st.session_state.messages):
         avatar = "🧑‍💻" if role == "user" else "🚀"
         bubble_color = "#f0f2f6" if role == "user" else "#e6f0ff"
@@ -754,26 +757,28 @@ def main():
             st.markdown(f"""
             <div style="
                 background-color: {bubble_color};
-                padding: 1rem;
-                border-radius: 12px;
+                padding: 0.8rem;
+                border-radius: 8px;
                 max-width: 90%;
                 display: inline-block;
                 box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-                margin: 5px 0;
+                margin: 3px 0;
                 text-align: left;
+                font-size: 14px;
+                line-height: 1.4;
             ">
             {text}
             </div>
             """, unsafe_allow_html=True)
 
-            # 添加按钮（仅 assistant 有）
+            # 添加按钮（仅 assistant 有）- 紧凑版
             if role == "assistant":
                 question = st.session_state.messages[i-1][1] if i > 0 and st.session_state.messages[i-1][0] == "user" else None
-                st.markdown("<div style='margin-top: 8px;'>", unsafe_allow_html=True)
+                st.markdown("<div style='margin-top: 5px;'>", unsafe_allow_html=True)
                 button_col1, button_col2, _ = st.columns([1, 1, 8])
                 with button_col1:
                     copy_html = create_copy_button_html(i, text)
-                    st.components.v1.html(copy_html, height=50)
+                    st.components.v1.html(copy_html, height=40)
                 with button_col2:
                     if question:
                         if st.button("🔄", key=f"regen_history_{i}", help="重新生成回答"):
@@ -788,8 +793,6 @@ def main():
             st.info("🔄 正在重新生成回答...")
             generate_ai_response(regenerate_question, msgs)
         st.rerun()
-
-    st.markdown('</div>', unsafe_allow_html=True)
 
     # 用户输入框 - 固定在底部
     if prompt := st.chat_input("请输入你的问题..."):
