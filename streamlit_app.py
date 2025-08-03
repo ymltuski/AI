@@ -28,7 +28,7 @@ st.markdown("""
 <style>
     /* 固定页面高度，禁止滚动 */
     .main .block-container {
-        padding-top: 1rem;
+        padding-top: 0.2rem;
         padding-bottom: 1rem;
         max-height: 100vh;
         overflow: hidden;
@@ -39,13 +39,13 @@ st.markdown("""
         font-size: 28px;
         font-weight: 800;
         text-align: center;
-        padding: 0.5rem;
+        padding: 0.3rem;
         color: white;
         background: linear-gradient(to right, #667eea, #764ba2);
         border-radius: 8px;
         box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-        margin-bottom: 0.5rem;
-        height: 60px;
+        margin-bottom: 0.2rem;
+        height: 50px;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -56,11 +56,13 @@ st.markdown("""
         font-size: 25px;
         font-weight: 600;
         color: #333;
+        margin-left: 0;
+        text-align: left;
     }
     
     /* 聊天容器固定高度 */
     .chat-container {
-        height: calc(100vh - 220px);
+        height: calc(100vh - 180px);
         overflow-y: auto;
         border: 1px solid #e0e0e0;
         border-radius: 8px;
@@ -739,14 +741,11 @@ def main():
     # 处理重新生成请求
     regenerate_question = handle_regenerate_request()
 
-    # 主聊天区域 - 使用固定高度容器
-    col1, col2 = st.columns([1, 10])
-    with col2:
-        # 主聊天区域 - 使用固定高度容器
-        st.markdown('<div class="qa-title">💬 智能问答</div>', unsafe_allow_html=True)
+    # 主聊天区域 - 智能问答标题左对齐
+    st.markdown('<div class="qa-title">💬 智能问答</div>', unsafe_allow_html=True)
 
-    # 聊天消息容器 - 固定高度，避免滚动
-    msgs = st.container(height=400)
+    # 聊天消息容器 - 增大高度
+    msgs = st.container(height=500)
 
     # 显示聊天历史（紧凑版气泡）
     for i, (role, text) in enumerate(st.session_state.messages):
