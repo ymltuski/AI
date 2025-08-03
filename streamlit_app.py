@@ -455,7 +455,8 @@ def build_retriever():
     # 添加上传的文档内容
     if 'uploaded_docs' in st.session_state and st.session_state.uploaded_docs:
         all_docs.extend(st.session_state.uploaded_docs)
-        st.info(f"已加载 {len(st.session_state.uploaded_docs)} 个上传文档到知识库")
+        # 在侧边栏显示，不在主聊天区域显示
+        # st.info(f"已加载 {len(st.session_state.uploaded_docs)} 个上传文档到知识库")
         
     if not all_docs:
         st.warning("没有找到任何文档内容，AI将仅使用自身知识回答问题")
@@ -465,7 +466,8 @@ def build_retriever():
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
     docs = text_splitter.create_documents(all_docs)
         
-    st.info(f"知识库已构建，包含 {len(docs)} 个文档片段")
+    # 在侧边栏显示信息，不影响聊天格式
+    # st.info(f"知识库已构建，包含 {len(docs)} 个文档片段")
         
     embeddings = OpenAIEmbeddings(openai_api_key=api_key)
     vectorstore = FAISS.from_documents(docs, embeddings)
@@ -504,16 +506,17 @@ def get_qa_chain_with_memory():
             try:
                 context_docs = retriever.invoke(inputs["question"])
                 context = format_docs(context_docs)
-                if context != "没有找到相关的上下文信息。":
-                    st.info(f"从知识库中找到 {len(context_docs)} 个相关文档片段")
-                else:
-                    st.info("未在知识库中找到相关信息，将使用AI一般知识回答")
+                # 不在这里显示信息，避免影响聊天格式
+                # if context != "没有找到相关的上下文信息。":
+                #     st.info(f"从知识库中找到 {len(context_docs)} 个相关文档片段")
+                # else:
+                #     st.info("未在知识库中找到相关信息，将使用AI一般知识回答")
             except Exception as e:
-                st.warning(f"检索时出错: {e}")
+                # st.warning(f"检索时出错: {e}")
                 context = "检索出错，没有找到相关的上下文信息。"
         else:
             context = "没有找到相关的上下文信息。"
-            st.info("知识库为空，将使用AI一般知识回答")
+            # st.info("知识库为空，将使用AI一般知识回答")
                 
         return {
             "context": context,
@@ -601,6 +604,10 @@ def setup_sidebar():
             st.markdown("### 📊 知识库状态")
             st.metric("文档数量", len(st.session_state.uploaded_docs))
             st.metric("总字符数", f"{total_chars:,}")
+            
+            # 显示最近检索状态
+            if hasattr(st.session_state, 'last_retrieval_info'):
+                st.info(st.session_state.last_retrieval_info)
                         
             # 测试检索功能
             if st.button("🔍 测试知识库检索", use_container_width=True):
@@ -674,6 +681,21 @@ def generate_ai_response(prompt, msgs):
             "question": prompt,
             "chat_history": st.session_state.chat_history
         }
+        
+        # 先进行检索，获取检索信息但不显示在聊天区域
+        retriever = build_retriever()
+        if retriever:
+            try:
+                context_docs = retriever.invoke(prompt)
+                if context_docs and len(context_docs) > 0:
+                    # 将检索信息保存到session_state，在侧边栏显示
+                    st.session_state.last_retrieval_info = f"✅ 找到 {len(context_docs)} 个相关文档片段"
+                else:
+                    st.session_state.last_retrieval_info = "ℹ️ 未找到相关文档，使用AI一般知识"
+            except Exception as e:
+                st.session_state.last_retrieval_info = f"⚠️ 检索出错: {str(e)}"
+        else:
+            st.session_state.last_retrieval_info = "ℹ️ 知识库为空，使用AI一般知识"
                 
         # 显示处理状态
         with st.spinner("正在思考中..."):
