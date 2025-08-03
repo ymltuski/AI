@@ -54,7 +54,7 @@ st.markdown("""
     /* 智能问答标题 */
     .qa-title {
         font-size: 25px;
-        font-weight: 300;
+        font-weight: 600;
         color: #333;
     }
     
@@ -742,6 +742,7 @@ def main():
     # 主聊天区域 - 使用固定高度容器
     col1, col2 = st.columns([1, 10])
     with col2:
+        # 主聊天区域 - 使用固定高度容器
         st.markdown('<div class="qa-title">💬 智能问答</div>', unsafe_allow_html=True)
 
     # 聊天消息容器 - 固定高度，避免滚动
