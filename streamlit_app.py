@@ -17,7 +17,7 @@ import json
 
 # 页面配置
 st.set_page_config(
-    page_title="动手学大模型应用开发", 
+    page_title="智能问答测试", 
     page_icon="🌐",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -36,7 +36,7 @@ st.markdown("""
     
     /* 固定标题高度 */
     .custom-title {
-        font-size: 28px;
+        font-size: 20px;
         font-weight: 800;
         text-align: center;
         padding: 0.5rem;
@@ -53,9 +53,8 @@ st.markdown("""
     
     /* 智能问答标题 */
     .qa-title {
-        font-size: 20px;
+        font-size: 28px;
         font-weight: 600;
-        margin-bottom: 0.5rem;
         color: #333;
     }
     
