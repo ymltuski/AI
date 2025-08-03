@@ -598,30 +598,6 @@ def setup_sidebar():
                 
         st.markdown("---")
                 
-        # 显示知识库状态
-        if 'uploaded_docs' in st.session_state:
-            total_chars = sum(len(doc) for doc in st.session_state.uploaded_docs)
-            st.markdown("### 📊 知识库状态")
-            st.metric("文档数量", len(st.session_state.uploaded_docs))
-            st.metric("总字符数", f"{total_chars:,}")
-                        
-            # 测试检索功能
-            if st.button("🔍 测试知识库检索", use_container_width=True):
-                test_query = st.text_input("输入测试问题:", value="学生手册", key="test_query")
-                if test_query:
-                    with st.spinner("正在测试检索..."):
-                        docs = test_retriever(test_query)
-                        if docs:
-                            st.success(f"✅ 检索成功！找到 {len(docs)} 个相关片段")
-                            with st.expander("查看检索结果"):
-                                for i, doc in enumerate(docs):
-                                    st.write(f"**片段 {i+1}:**")
-                                    st.write(doc.page_content[:300] + "...")
-                        else:
-                            st.warning("⚠️ 未找到相关内容")
-                
-        st.markdown("---")
-                
         # 清除对话历史按钮
         if st.button("🗑️ 清除对话历史", use_container_width=True):
             st.session_state.messages = []
