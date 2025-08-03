@@ -36,7 +36,7 @@ st.markdown("""
     
     /* 固定标题高度 */
     .custom-title {
-        font-size: 20px;
+        font-size: 28px;
         font-weight: 800;
         text-align: center;
         padding: 0.5rem;
@@ -53,8 +53,8 @@ st.markdown("""
     
     /* 智能问答标题 */
     .qa-title {
-        font-size: 28px;
-        font-weight: 600;
+        font-size: 25px;
+        font-weight: 300;
         color: #333;
     }
     
